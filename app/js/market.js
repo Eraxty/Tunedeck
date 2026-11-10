@@ -97,6 +97,8 @@ var Ext = (function () {
     var d = db(), el = document.getElementById('theme-css'), t = d.themes.filter(function (x) { return x.id === d.activeTheme; })[0];
     var f = FEATURED.filter(function (x) { return x.id === d.activeTheme; })[0];
     if (f) t = { ini: featuredIni(f), css: '' };
+    // body.themed makes a theme clearly visible: firmer panels in its colours and its accent on key controls.
+    document.body.classList.toggle('themed', !!t);
     if (!t) { el.textContent = ''; return; }
     var schemes = parseIni(t.ini || ''), name = d.scheme && schemes[d.scheme] ? d.scheme : Object.keys(schemes)[0], vars = schemes[name] || {};
     var css = ':root{' + Object.keys(vars).map(function (k) { return k + ':#' + vars[k] + ';' + k.replace('--spice-', '--spice-rgb-') + ':' + hexRgb(vars[k]); }).join(';') + '}';

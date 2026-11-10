@@ -64,6 +64,11 @@ var Focus = (function () {
     return { top: 0, bottom: window.innerHeight };
   }
   function onScreen(el) { var r = el.getBoundingClientRect(), c = clip(el); return r.bottom > c.top + 8 && r.top < c.bottom - 8; }
+  // The part of el that can be seen (a card half under a panel edge counts only by its visible half).
+  function seen(el) {
+    var r = el.getBoundingClientRect(), c = clip(el), top = Math.max(r.top, c.top), bottom = Math.min(r.bottom, c.bottom);
+    return { left: r.left, right: r.right, width: r.width, top: top, bottom: bottom, height: Math.max(0, bottom - top) };
+  }
 
   // Spatial navigation in the style of the W3C proposal: only elements past the current one in the pressed
   // direction count, the nearest edge-to-edge wins, and elements lined up with the current one (overlapping
@@ -74,7 +79,8 @@ var Focus = (function () {
     else if (dir === 'up') { if (r.top + r.height / 2 >= c.top + c.height / 2 - 2 || r.top >= c.top + 1) return -1; gap = c.top - r.bottom; }
     else if (dir === 'right') { if (r.left + r.width / 2 <= c.left + c.width / 2 + 2 || r.right <= c.right - 1) return -1; gap = r.left - c.right; }
     else { if (r.left + r.width / 2 >= c.left + c.width / 2 - 2 || r.left >= c.left + 1) return -1; gap = c.left - r.right; }
-    if (vert) { ov = Math.min(c.right, r.right) - Math.max(c.left, r.left); mid = Math.abs(r.left + r.right - c.left - c.right) / 2; }
+    // Lined-up items are ranked by centre or left edge, whichever is closer (a wide header lands on the first chip).
+    if (vert) { ov = Math.min(c.right, r.right) - Math.max(c.left, r.left); mid = Math.min(Math.abs(r.left + r.right - c.left - c.right) / 2, Math.abs(r.left - c.left)); }
     else { ov = Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top); mid = Math.abs(r.top + r.bottom - c.top - c.bottom) / 2; }
     return Math.max(0, gap) + (ov > 0 ? 0 : 60 - ov * (vert ? 2 : 3)) + mid * 0.05;
   }
@@ -89,18 +95,27 @@ var Focus = (function () {
       var vis = all.filter(function (e) { return sc.contains(e) && onScreen(e); });
       if (vis.length) return set(dir === 'up' ? vis[vis.length - 1] : vis[0]);
     }
-    var c = cur.getBoundingClientRect(), best = null, bs = Infinity;
+    var c = seen(cur), best = null, bs = Infinity, inBest = null, ibs = Infinity;
     all.forEach(function (el) {
       if (el === cur) return;
-      var s = score(dir, c, el.getBoundingClientRect());
-      if (s >= 0 && s < bs) { bs = s; best = el; }
+      var mine = sc && sc.contains(el);
+      // Items scrolled out of sight count only inside the list you are in (moving there scrolls them in);
+      // elsewhere they are hidden behind a panel edge and focusing them would look like focus vanished.
+      if (!mine && !onScreen(el)) return;
+      var s = score(dir, c, mine && !onScreen(el) ? el.getBoundingClientRect() : seen(el));
+      if (s < 0) return;
+      if (s < bs) { bs = s; best = el; }
+      if (mine && s < ibs) { ibs = s; inBest = el; }
     });
+    // Up and down keep going through the list you are in, even when its next item is a scroll away and
+    // something in a neighbouring panel is closer; you leave the list at its ends.
+    if (inBest && (dir === 'up' || dir === 'down')) best = inBest;
     if (!best) return;
     function ok(el) { return el && all.indexOf(el) >= 0; }
     // Entering another area (library, main view, Now Playing, top bar, player bar) returns to where you were,
     // when that spot is on screen and in the pressed direction.
     var reg = best.closest('.region');
-    if (reg && reg !== cur.closest('.region') && ok(reg._last) && onScreen(reg._last) && score(dir, c, reg._last.getBoundingClientRect()) >= 0) return set(reg._last);
+    if (reg && reg !== cur.closest('.region') && ok(reg._last) && onScreen(reg._last) && score(dir, c, seen(reg._last)) >= 0) return set(reg._last);
     if (dir === 'up' || dir === 'down') {
       var row = best.closest('.hs');
       if (row && row !== cur.closest('.hs') && ok(row._last)) best = row._last;

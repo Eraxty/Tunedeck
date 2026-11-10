@@ -313,7 +313,13 @@ var UI = (function () {
   function paintLikes(on) { $$('.c-like').forEach(function (e) { e.classList.toggle('on', on); e.innerHTML = Icon(on ? 'heartFill' : 'heart', e.classList.contains('big') ? 40 : 28); }); }
   function syncLikeIcons() { paintLikes(Cat.isLiked(Playback.state.track)); }
 
-  function onState(s) {
+  // Spotify sends several state events around every song change; the screen is only touched when something
+  // visible changed, so the TV's processor stays free for the audio.
+  var shown = '';
+  function onState(s, force) {
+    var key = [s.paused, s.shuffle, s.repeat, !!s.buffering && !s.paused].join();
+    if (key === shown && force !== true) return;
+    shown = key;
     $$('.c-play').forEach(function (e) { e.innerHTML = Icon(s.paused ? 'play' : 'pause', e.classList.contains('big') ? 48 : 32); });
     $$('.c-shuffle').forEach(function (e) { e.classList.toggle('on', s.shuffle); });
     $$('.c-repeat').forEach(function (e) { e.classList.toggle('on', s.repeat !== 'off'); e.classList.toggle('one', s.repeat === 'track'); });
@@ -326,7 +332,8 @@ var UI = (function () {
     $('.tnt', els.top).textContent = t ? t.name : 'TuneDeck';
     $('.tna', els.top).textContent = t ? t.artist_names.join(', ') : 'Nothing playing';
     setArt($('.tnc', els.top), t && (t.cover_small || t.album_cover_url));
-    setBackground(t);
+    // The backdrop (image decode and blur) waits until the new song has started playing.
+    clearTimeout(bgT); bgT = setTimeout(function () { setBackground(t); }, 1200);
     syncLikeIcons();
     if (t) Cat.checkLiked(t).then(function () { if (Playback.state.track === t) syncLikeIcons(); });
     fillNpv(t);
@@ -359,7 +366,7 @@ var UI = (function () {
     }
     c.drawImage(src, 0, 0, w, hgt);
   }
-  var bgFlip = 0, bgImg = null;
+  var bgFlip = 0, bgImg = null, bgT = null;
   function setBackground(t) {
     var layers = $$('#bg .bgimg'), next = layers[bgFlip ^ 1], prev = layers[bgFlip], url = t && (t.cover_big || t.album_cover_url);
     if (!url) { prev.style.opacity = 0; next.style.opacity = 0; bgImg = null; return; }
@@ -425,7 +432,9 @@ var UI = (function () {
   }
   function fillNext() {
     var nb = $('.next-body', els.npv); if (!nb) return;
-    var q = Playback.queue(), n = q[Playback.index() + 1];
+    var q = Playback.queue(), n = q[Playback.index() + 1], key = n ? n.uri : '-';
+    if (nb._key === key) return;
+    nb._key = key;
     nb.innerHTML = n ? '<div class="next-item"><span class="tc"' + bg(n.cover_small || n.album_cover_url) + '></span><span class="nm"><span class="tt">' + esc(n.name) + '</span><span class="ta">' + esc(n.artist_names.join(', ')) + '</span></span></div>' : '<p class="dim small">Nothing up next</p>';
     lazy(nb);
   }
@@ -503,7 +512,7 @@ var UI = (function () {
     // Holding OK on these repeats (the remote sends repeated key presses), for big corrections.
     $('.t-early', L.el).onclick = function () { nudge(100); };
     $('.t-late', L.el).onclick = function () { nudge(-100); };
-    fillPlayer(); onState(Playback.state); syncLikeIcons();
+    fillPlayer(); onState(Playback.state, true); syncLikeIcons();
     setTimeout(function () { Focus.set($('.c-play.big', L.el)); }, 0);
   }
   function toggle(what) {

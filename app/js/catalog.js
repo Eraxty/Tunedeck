@@ -120,8 +120,8 @@ var Cat = (function () {
               if (!mine || seen[key]) return false; seen[key] = 1; return true;
             }).map(function (t) { return track(t); }));
           }),
-          spAll('/artists/' + id + '/albums?include_groups=album&limit=20', 40, album).catch(function () { return []; }),
-          spAll('/artists/' + id + '/albums?include_groups=single&limit=20', 40, album).catch(function () { return []; })
+          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function () { return []; }),
+          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function () { return []; })
         ]).then(function (r) { return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] }; });
       });
     },

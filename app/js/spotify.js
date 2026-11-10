@@ -96,6 +96,8 @@ var SpotifyApi = (function () {
       if (r.status === 204 || r.status === 202) return null;
       if (r.ok) return r.text().then(function (t) { if (!t) return null; try { return JSON.parse(t); } catch (e) { return t; } });
       if (r.status === 401 && attempt < 1) { access = null; return call(method, path, body, attempt + 1); }
+      // Spotify's servers return 500/502/503 now and then; reads are retried a couple of times.
+      if (r.status >= 500 && method === 'GET' && attempt < 2) return wait(700 * (attempt + 1)).then(function () { return call(method, path, body, attempt + 1); });
       if (r.status === 429 && attempt < 3) {
         var ra = parseInt(r.headers.get('Retry-After'), 10), ms = ra > 0 ? ra * 1000 : 1000 * Math.pow(2, attempt);
         if (ms > 30000) throw fail('Spotify is rate limiting us. Try again in ' + Math.ceil(ms / 1000) + 's.', 429);

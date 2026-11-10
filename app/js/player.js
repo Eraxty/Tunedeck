@@ -63,17 +63,30 @@ var Playback = (function () {
   }
   function spDev(path) { return path + (path.indexOf('?') < 0 ? '?' : '&') + 'device_id=' + sp.device; }
   // quiet: reject instead of showing the error, so the caller can try something else.
-  function spPlay(body, quiet) {
+  function spPlay(body, quiet, retried) {
     return spInit().then(function () {
       if (sp.player.activateElement) sp.player.activateElement();
       return SpotifyApi.call('PUT', spDev('/me/player/play'), body);
     }).catch(function (e) {
       Log.add('play fail', e.message, e.code);
       // The device can drop off Spotify's list after the TV sleeps; reconnect once and retry.
-      if (e.code === 404 && sp.player && !/context|offset/i.test(e.message)) { sp.ready = null; sp.player.disconnect(); sp.player = null; return spPlay(body, quiet); }
+      if (e.code === 404 && sp.player && !/context|offset/i.test(e.message)) { sp.ready = null; sp.player.disconnect(); sp.player = null; return spPlay(body, quiet, retried); }
+      // A 5xx ("Bad gateway") often comes back even though the song started. Look first, then retry once.
+      if (e.code >= 500 && !retried) {
+        return new Promise(function (r) { setTimeout(r, 1500); }).then(function () {
+          if (state.track && !state.paused && wanted(body, state.track)) return;
+          return spPlay(body, quiet, true);
+        });
+      }
       if (quiet) throw e;
       emit('error', { track: null, message: e.message });
     });
+  }
+  // Whether the playing song is the one a play request asked for.
+  function wanted(body, t) {
+    if (body.offset && body.offset.uri) return body.offset.uri === t.uri;
+    if (body.uris) return body.uris[(body.offset && body.offset.position) || 0] === t.uri;
+    return !!body.context_uri && sp.ctx === body.context_uri;
   }
   // Plays song i of the queue list shown to the user. Inside an album or playlist, Spotify starts the context
   // at that song (the rest of the context follows); songs added with "Add to queue" or a context Spotify
@@ -172,36 +185,27 @@ var Playback = (function () {
 
   function isSp() { return state.engine === 'spotify'; }
 
-  // Smooth transitions. Free songs truly overlap (crossfade on two elements). Spotify's player for other apps
-  // plays one stream at a time, so Spotify songs fade out and the next fades in.
-  var baseVol = 0.8, applied = -1, fadeMs = null, trackAt = 0, fadedOut = false;
+  // Smooth transitions: free songs truly overlap (crossfade on two elements). Spotify's player for other apps
+  // plays one stream at a time, so a fade there is only a long dip in volume that sounds like a pause; Spotify
+  // songs play back to back at full volume.
+  var baseVol = 0.8, applied = -1, fadeMs = null;
   function fadeLength() { if (fadeMs === null) fadeMs = Store.get('fadeMs', 6000); return fadeMs; }
   function applyVolume(v) {
     if (Math.abs(v - applied) < 0.02) return;
     applied = v;
     if (isSp()) { if (sp.player) sp.player.setVolume(Math.max(0.0001, v)); } else au().volume = v;
   }
-  on('track', function () { trackAt = Date.now(); });
   setInterval(function () {
-    if (!state.track || state.paused) return;
-    var f = fadeLength(), d = duration(), left = d - position(), since = Date.now() - trackAt, v = baseVol;
-    if (!isSp()) {
-      if (xf) {
-        var k = Math.min(1, (Date.now() - xf.at) / xf.ms);
-        xf.old.volume = baseVol * (1 - k); au().volume = baseVol * k; applied = au().volume;
-        if (k >= 1) endCrossfade();
-        return;
-      }
-      if (f && d > f * 3 && left < f && left > 300 && state.repeat !== 'track') { var i = nextIndex(1, true); if (i >= 0) crossfadeTo(i, Math.max(1000, left)); return; }
-      applyVolume(baseVol);
+    if (!state.track || state.paused || isSp()) return;
+    var f = fadeLength(), d = duration(), left = d - position();
+    if (xf) {
+      var k = Math.min(1, (Date.now() - xf.at) / xf.ms);
+      xf.old.volume = baseVol * (1 - k); au().volume = baseVol * k; applied = au().volume;
+      if (k >= 1) endCrossfade();
       return;
     }
-    if (f && d > f * 3) {
-      if (left < f && left > 0) { v = baseVol * Math.max(0.05, left / f); fadedOut = true; }
-      else if (fadedOut && since < f) v = baseVol * Math.min(1, 0.05 + since / f);
-      else if (since >= f) fadedOut = false;
-    }
-    applyVolume(v);
+    if (f && d > f * 3 && left < f && left > 300 && state.repeat !== 'track') { var i = nextIndex(1, true); if (i >= 0) crossfadeTo(i, Math.max(1000, left)); return; }
+    applyVolume(baseVol);
   }, 200);
 
   // ---------------- public ----------------

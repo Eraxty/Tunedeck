@@ -41,36 +41,38 @@ var Account = (function () {
 
   // ---------------- Marketplace ----------------
   // Catalogue previews are often multi-megabyte screenshots and animated GIFs, which flood this TV's graphics
-  // memory (the screen flickers). Each one is drawn once into a small still image, one at a time.
+  // memory. Each one is drawn once into a small canvas (no image encoding: that costs whole seconds of CPU here
+  // and starves the music), only when its card comes near the screen, one at a time.
   var thumbQ = [], thumbBusy = false;
-  function thumbs(scope, w) {
-    [].forEach.call(scope.querySelectorAll('[data-thumb]'), function (el) { thumbQ.push({ el: el, url: el.getAttribute('data-thumb'), w: w }); el.removeAttribute('data-thumb'); });
-    pump();
+  var thumbIO = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { thumbIO.unobserve(e.target); thumbQ.push(e.target); pump(); } });
+  }, { rootMargin: '300px' }) : null;
+  function thumbs(scope) {
+    [].forEach.call(scope.querySelectorAll('[data-thumb]'), function (el) { if (thumbIO) thumbIO.observe(el); else { thumbQ.push(el); pump(); } });
   }
   function pump() {
     if (thumbBusy || !thumbQ.length) return;
-    var job = thumbQ.shift();
-    if (!document.body.contains(job.el)) return pump();
+    var el = thumbQ.shift(), url = el.getAttribute('data-thumb');
+    el.removeAttribute('data-thumb');
+    if (!document.body.contains(el) || !url) return pump();
     thumbBusy = true;
-    var img = new Image(); img.crossOrigin = 'anonymous';
-    function done(url) { if (url) job.el.style.backgroundImage = 'url("' + url + '")'; img.onload = img.onerror = null; img.src = ''; thumbBusy = false; setTimeout(pump, 20); }
+    var img = new Image();
+    function done() { img.onload = img.onerror = null; img.src = ''; thumbBusy = false; setTimeout(pump, 60); }
     img.onload = function () {
-      try {
-        var c = document.createElement('canvas'), k = Math.min(1, job.w / img.width);
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        done(c.toDataURL('image/jpeg', 0.85));
-      } catch (e) { done(null); }
+      var c = document.createElement('canvas'), w = el.clientWidth || 320, hh = el.clientHeight || 180, k = Math.max(w / img.width, hh / img.height);
+      c.width = w; c.height = hh; c.className = 'thumb';
+      c.getContext('2d').drawImage(img, (w - img.width * k) / 2, (hh - img.height * k) / 2, img.width * k, img.height * k);
+      el.appendChild(c); done();
     };
-    img.onerror = function () { done(null); };
-    img.src = job.url;
+    img.onerror = done;
+    img.src = url;
   }
   function thumb(url) { return url ? ' data-thumb="' + esc(url) + '"' : ''; }
   // Market detail: the page behind is hidden while it is open, so nothing repaints under the dialog.
   function detail(html) {
     document.body.classList.add('mmodal');
     var d = UI.layer('dialog-layer', html, { onClose: function () { document.body.classList.remove('mmodal'); } });
-    thumbs(d.el, 880);
+    thumbs(d.el);
     return d;
   }
 
@@ -105,7 +107,7 @@ var Account = (function () {
         c.onclick = function () { (tab === 'themes' ? themeDetail : extDetail)(m); };
         grid.appendChild(c);
       });
-      thumbs(grid, 480);
+      thumbs(grid);
     }, function (e) { grid.innerHTML = '<p class="dim pad">' + esc(e.message) + '</p>'; });
   });
 
@@ -225,7 +227,7 @@ var Account = (function () {
       function paintFade() {
         var ms = Playback.fade();
         fr.querySelector('.t').textContent = 'Smooth transitions: ' + (ms ? (ms / 1000) + ' seconds' : 'off');
-        fr.querySelector('.s').textContent = 'Press left or right. Free songs truly crossfade (overlap). Spotify songs fade out and in, since Spotify’s player for other apps plays one song at a time.';
+        fr.querySelector('.s').textContent = 'Press left or right. Free songs crossfade (overlap). Spotify songs play back to back: Spotify’s player for other apps plays one song at a time, so a fade there only sounds like a pause.';
       }
       var ed = row(s, 'orbit', '', '', function () { Playback.eightD(!Playback.eightD()); paint8d(); });
       function paint8d() {

@@ -69,6 +69,8 @@ h3{font-size:26px;font-weight:700}
 .lib-min .lib-head h2,.lib-min .lib-hint,.lib-min .lchips,.lib-min .lm{display:none}
 .lib-min .llist{margin-top:12px}
 .lib-min .lrow{justify-content:center;padding:8px 0}
+.lib-min .lrow.focus{background:none;transform:none}
+.lib-min .lrow.focus .lc{box-shadow:0 0 0 3px var(--spice-text)}
 .lchips{display:flex;padding:14px 12px 12px;flex:none}
 .chip.small{height:44px;line-height:44px;padding:0 18px;margin-right:8px;font-size:18px;border-radius:22px}
 .llist{flex:1;min-height:0;overflow:hidden;margin:0 -12px;padding:0 12px}
@@ -79,7 +81,7 @@ h3{font-size:26px;font-weight:700}
 .lm{margin-left:14px;min-width:0;display:flex;flex-direction:column}
 .lt{font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ls{font-size:17px;color:var(--spice-subtext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lrow.focus{background:rgba(var(--spice-rgb-text),.12)}
+.lrow.focus{background:rgba(var(--spice-rgb-text),.12);transform:none}
 
 /* ---------- main view ---------- */
 #main{position:fixed;left:452px;top:100px;right:16px;bottom:132px;z-index:1;overflow:hidden}
@@ -430,7 +432,13 @@ h3{font-size:26px;font-weight:700}
 .scheme .sw{margin-right:20px}
 .scheme.focus{box-shadow:0 0 0 3px var(--spice-text)}
 .ok{color:var(--spice-button);font-weight:700}.bad{color:#ff6b6b;font-weight:700}.warn{color:#ffc864;font-weight:700}
+.mprev,.mbig{position:relative;overflow:hidden}.thumb{position:absolute;left:0;top:0;width:100%;height:100%}
 .mmodal #view{visibility:hidden}
+/* an active theme or palette shows through: firmer panels in its colours, its accent on the main controls */
+.themed #lib,.themed #main,.themed #npv{background:rgba(var(--spice-rgb-main),.86)}
+.themed #bar,.themed #top .spill{background:rgba(var(--spice-rgb-player),.92)}
+.themed #bg{background:var(--spice-main)}
+.themed .chip.on,.themed .ico-btn.c-play,.themed .ico-btn.c-play.focus,.themed .pl-ctl .ico-btn.c-play{background:var(--spice-button);color:var(--spice-main)}
 
 /* ---------- settings ---------- */
 .set-sec{margin-bottom:36px;max-width:1200px}
