@@ -19,25 +19,40 @@ var Profiles = (function () {
     list.push(p); save(list); return p;
   }
 
+  // Both ways in: a Spotify sign-in (the profile takes the account's name and picture) or free music.
+  // onCancel runs when the sign-in is abandoned.
+  function signIn(onCancel) {
+    var p = make('New profile');
+    Store.use(p.id);
+    Account.signIn(function (err) {
+      if (err) { removeQuiet(p.id); return onCancel(); }
+      activate(p);
+    });
+  }
+  function free(onCancel) { UI.askText('What’s your name?', '', 'Next', function (name) { activate(make(name)); }, onCancel); }
+
   function add() {
-    var d = UI.dialog('Add a profile', '<p class="dim">Sign in with Spotify to play your own music, playlists and Liked Songs (Spotify Premium). Or use TuneDeck with free music.</p>', [
-      { label: 'Sign in with Spotify', onClick: function () {
-        var p = make('New profile');
-        Store.use(p.id);
-        Account.signIn(function (err) {
-          if (err) { removeQuiet(p.id); return pick(); }
-          activate(p);
-        });
-      } },
-      { label: 'Continue without Spotify', onClick: function () {
-        UI.askText('What’s your name?', '', 'Next', function (name) { activate(make(name)); });
-      } }
+    return UI.dialog('Add a profile', '<p class="dim">Sign in with Spotify to play your own music, playlists and Liked Songs (Spotify Premium). Or use TuneDeck with free music.</p>', [
+      { label: 'Sign in with Spotify', onClick: function () { signIn(pick); } },
+      { label: 'Continue without Spotify', onClick: function () { free(pick); } },
+      { label: 'Cancel', back: true, onClick: pick }
     ]);
-    return d;
+  }
+
+  // First launch: straight to signing in with Spotify.
+  function welcome() {
+    var L = UI.layer('full profiles-screen', '<div class="prof-wrap welcome"><div class="logo-big">' + Icon('music', 52) + '<span>TuneDeck</span></div>' +
+      '<h1>Your Spotify, made for the TV</h1><p class="dim lead">Sign in with your Spotify Premium account to play your music, playlists and Liked Songs here.</p>' +
+      '<div class="wbtns"><button class="pill primary big f default w-sp">Sign in with Spotify</button><button class="pill f w-free">Use free music instead</button></div></div>', {
+      onBack: function () { if (!started) welcome(); }
+    });
+    L.el.querySelector('.w-sp').onclick = function () { L.close(); signIn(welcome); };
+    L.el.querySelector('.w-free').onclick = function () { L.close(); free(welcome); };
   }
 
   function pick() {
     var list = all();
+    if (!list.length && !started) return welcome();
     var L = UI.layer('full profiles-screen', '<div class="prof-wrap"><div class="logo-big">' + Icon('music', 52) + '<span>TuneDeck</span></div><h1>Who’s listening?</h1><div class="prof-row"></div></div>', {
       onBack: function () { if (!started) pick(); }
     });
@@ -73,6 +88,7 @@ var Profiles = (function () {
     onReady = ready;
     var list = all(), last = Store.gget('lastProfile', null), picked = false;
     try { picked = !!sessionStorage.getItem('picked'); } catch (e) {}
+    if (!list.length) return welcome();
     if (list.length === 1) return activate(list[0]);
     var lp = list.filter(function (p) { return p.id === last; })[0];
     if (lp && picked) return activate(lp);

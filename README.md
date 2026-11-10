@@ -28,7 +28,8 @@ and imports). Nothing touches the TV's firmware.
 Spotify only lets an app made by an individual sign in with a key ("Client ID") that the listener creates
 themselves, so each person sets up their own key once. It takes about 3 minutes and needs Spotify Premium.
 
-1. On the TV: **Settings → Sign in with Spotify** (or **Add profile → Sign in with Spotify**).
+1. On the TV: the first launch opens **Sign in with Spotify** (later: **Settings → Sign in with Spotify** or
+   **Add profile → Sign in with Spotify**).
 2. Put your phone on the **same Wi-Fi as the TV** and scan the QR code.
 3. The phone walks you through it:
    1. Open the Spotify developer dashboard and log in with *your* Spotify account.
@@ -59,8 +60,11 @@ redirect address keeps working.
 The full-screen player has **Cover**, **Lyrics**, **Info** (song name and artist) and **Dark** switches, in
 any combination, remembered per profile. **Settings → Lyrics delay for this TV** fixes lyrics that are always
 off by the same amount, for example with a soundbar. **Settings → Smooth transitions** (0 to 12 seconds):
-free songs truly crossfade (overlap); Spotify songs fade out and in. **8D** (player or Settings) makes the
-sound circle around you, for free songs.
+free songs truly crossfade (overlap); Spotify songs fade out and in. **8D** sound (circling around you) plays
+by itself on every song that supports it, which is free songs; **Settings → 8D audio** turns it off.
+
+Select **Your Library** at the top of the library panel to fold it into a narrow rail of covers (and back).
+Pointing with the Magic Remote focuses what you point at; its wheel scrolls the list under the pointer.
 
 If the TV feels slow, close other apps first (YouTube in particular stays in memory). The TV has about 1 GB
 of RAM and swaps when it runs out.
@@ -77,11 +81,18 @@ artist's albums and singles.
 - **"This Spotify account isn't on the app's allowed users list"**: you're logging in with a different
   Spotify account than the one that created the key. Use the same account, or add the other account under
   **Users and Access** in the dashboard.
+**Marketplace extensions** are written for Spotify desktop's newer browser engine. TuneDeck converts each one
+for the TV's engine when you open it (with [Babel](https://babeljs.io), bundled), then says whether it is
+ready or only partly works because it relies on parts of Spotify desktop's interface that TuneDeck doesn't
+have.
+
 - **Logs**: the app writes to `/tmp/tunedeck-app.log` on the TV (`ssh root@<tv-ip> cat /tmp/tunedeck-app.log`).
 
 ## Limits from Spotify (developer apps, 2026)
 
-- Playlists you follow but don't own play fine, but their song lists can't be shown.
+- Playlists you follow but don't own play fine, but their song lists can't be shown. Spotify's own mixes
+  (Daily Mix, artist Mixes, Discover Weekly) can't be read by apps at all; TuneDeck shows them by name and
+  plays them as a whole.
 - An artist's "Popular" songs come from a search, as Spotify removed that endpoint for developer apps.
 - No music videos or Canvas loops: Spotify's player for other apps is audio-only, and its terms forbid
   pairing Spotify audio with other video.

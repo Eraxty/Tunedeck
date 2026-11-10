@@ -21,7 +21,7 @@ var Account = (function () {
         '<div class="step"><b>3</b><span>When your phone says the connection isn’t private, tap <i>Advanced</i>, then <i>Continue</i>: it’s this TV’s own certificate</span></div>' +
         '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> on any computer on the same Wi-Fi.</p>' +
         '<p class="dim small">Waiting for you to log in…</p></div></div>',
-        [{ label: 'Cancel', onClick: function () { SpotifyApi.stopLogin(); if (done) done(new Error('cancelled')); } }]);
+        [{ label: 'Cancel', back: true, onClick: function () { SpotifyApi.stopLogin(); if (done) done(new Error('cancelled')); } }]);
     }, function (e) { UI.toast(e.message); if (done) done(e); });
   }
   return { signIn: signIn, helperInfo: helperInfo };
@@ -40,6 +40,40 @@ var Account = (function () {
   }
 
   // ---------------- Marketplace ----------------
+  // Catalogue previews are often multi-megabyte screenshots and animated GIFs, which flood this TV's graphics
+  // memory (the screen flickers). Each one is drawn once into a small still image, one at a time.
+  var thumbQ = [], thumbBusy = false;
+  function thumbs(scope, w) {
+    [].forEach.call(scope.querySelectorAll('[data-thumb]'), function (el) { thumbQ.push({ el: el, url: el.getAttribute('data-thumb'), w: w }); el.removeAttribute('data-thumb'); });
+    pump();
+  }
+  function pump() {
+    if (thumbBusy || !thumbQ.length) return;
+    var job = thumbQ.shift();
+    if (!document.body.contains(job.el)) return pump();
+    thumbBusy = true;
+    var img = new Image(); img.crossOrigin = 'anonymous';
+    function done(url) { if (url) job.el.style.backgroundImage = 'url("' + url + '")'; img.onload = img.onerror = null; img.src = ''; thumbBusy = false; setTimeout(pump, 20); }
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas'), k = Math.min(1, job.w / img.width);
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        done(c.toDataURL('image/jpeg', 0.85));
+      } catch (e) { done(null); }
+    };
+    img.onerror = function () { done(null); };
+    img.src = job.url;
+  }
+  function thumb(url) { return url ? ' data-thumb="' + esc(url) + '"' : ''; }
+  // Market detail: the page behind is hidden while it is open, so nothing repaints under the dialog.
+  function detail(html) {
+    document.body.classList.add('mmodal');
+    var d = UI.layer('dialog-layer', html, { onClose: function () { document.body.classList.remove('mmodal'); } });
+    thumbs(d.el, 880);
+    return d;
+  }
+
   UI.register('market', function (root, tab) {
     tab = tab || 'themes';
     root.appendChild(h('h1', 'page-title', 'Marketplace'));
@@ -66,17 +100,17 @@ var Account = (function () {
       grid.innerHTML = '';
       if (!list.length) return grid.appendChild(h('p', 'dim pad', 'Nothing found. GitHub may be limiting requests; try again in a minute.'));
       list.slice(0, 60).forEach(function (m) {
-        var c = h('button', 'mcard f' + (Ext.installed(m) ? ' is-installed' : ''), '<div class="mprev"' + UI.bg(m.preview) + '></div><div class="mbody"><div class="t">' + esc(m.name) + '</div>' +
+        var c = h('button', 'mcard f' + (Ext.installed(m) ? ' is-installed' : ''), '<div class="mprev"' + thumb(m.preview) + '></div><div class="mbody"><div class="t">' + esc(m.name) + '</div>' +
           '<div class="s">' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</div><div class="md">' + esc((m.desc || '').slice(0, 96)) + '</div></div>');
         c.onclick = function () { (tab === 'themes' ? themeDetail : extDetail)(m); };
         grid.appendChild(c);
       });
-      UI.lazy(grid);
+      thumbs(grid, 480);
     }, function (e) { grid.innerHTML = '<p class="dim pad">' + esc(e.message) + '</p>'; });
   });
 
   function themeDetail(m) {
-    var d = UI.layer('dialog-layer', '<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + UI.bg(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
+    var d = detail('<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + thumb(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
       '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p></div></div>' +
       '<h3 class="sch-h">Colour schemes</h3><div class="schemes"><p class="dim">Downloading…</p></div><div class="dbtns"><button class="pill f close-d">Close</button></div></div>');
     d.el.querySelector('.close-d').onclick = d.close;
@@ -93,21 +127,25 @@ var Account = (function () {
         };
         box.appendChild(b);
       });
-      UI.lazy(d.el); Focus.first(box);
+      Focus.first(box);
     }, function (e) { box.innerHTML = '<p class="dim">' + esc(e.message) + '</p>'; });
   }
 
   function extDetail(m) {
-    var d = UI.layer('dialog-layer', '<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + UI.bg(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
-      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p><p class="compat dim">Checking whether it runs on this TV…</p></div></div>' +
+    var d = detail('<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + thumb(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
+      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p><p class="compat dim">Getting it ready for this TV…</p></div></div>' +
       '<div class="dbtns"><button class="pill primary f inst" disabled>Install</button><button class="pill f close-d">Close</button></div></div>');
     d.el.querySelector('.close-d').onclick = d.close;
     var inst = d.el.querySelector('.inst'), compat = d.el.querySelector('.compat');
-    Ext.checkExtension(m).then(function (ok) {
-      compat.innerHTML = ok ? '<span class="ok">Compatible with this TV.</span> Extensions written for Spotify desktop may only partly work here.' : '<span class="bad">Needs a newer browser engine than this TV has.</span> It can be installed but stays off.';
-      inst.disabled = false; inst.textContent = ok ? 'Install' : 'Install anyway';
-      inst.onclick = function () { Ext.installExtension(m).then(function (on) { d.close(); UI.toast(on ? m.name + ' installed and running' : m.name + ' installed (off: not compatible)'); UI.refresh(); }, function (e) { UI.toast(e.message); }); };
-    }, function (e) { compat.textContent = e.message; });
+    Ext.checkExtension(m).then(function (r) {
+      compat.innerHTML = !r.missing.length ? '<span class="ok">Ready for this TV.</span> Everything it asks Spicetify for is available here.' :
+        '<span class="warn">Partly works.</span> It also uses ' + esc(r.missing.join(', ')) + ' from Spotify desktop, which TuneDeck doesn’t have, so those parts do nothing here.';
+      inst.disabled = false; inst.textContent = Ext.installed(m) ? 'Reinstall' : r.missing.length ? 'Install anyway' : 'Install';
+      inst.onclick = function () {
+        Ext.installExtension(m).then(function () { d.close(); UI.toast(m.name + ' installed and running'); UI.refresh(); }, function (e) { UI.toast(e.message); });
+      };
+      Focus.set(inst);
+    }, function (e) { compat.innerHTML = '<span class="bad">Can’t run on this TV.</span> ' + esc(e.message); });
   }
 
   function installedTab(root) {
@@ -131,10 +169,12 @@ var Account = (function () {
     list.appendChild(h('h2', 'pad-top', 'Extensions'));
     if (!d.extensions.length) list.appendChild(h('p', 'dim pad', 'No extensions installed.'));
     d.extensions.forEach(function (x) {
-      row(x.name, !x.compatible ? 'Not compatible with this TV · select to remove' : x.on ? 'On · restart TuneDeck to apply changes' : 'Off', x.on, function () {
+      var note = x.missing && x.missing.length ? ' · partly works here' : '';
+      row(x.name, !x.compatible ? 'Made for a newer browser · reinstall it from Extensions to convert it, or select to remove' : (x.on ? 'On' : 'Off') + note + ' · changes apply after restarting TuneDeck', x.on, function () {
         if (!x.compatible) { Ext.remove('extensions', x.id); UI.refresh(); return; }
         Ext.setExtension(x.id, !x.on); UI.refresh();
       }, 'store');
+      if (x.compatible) row('Remove ' + x.name, 'Deletes it from this profile', false, function () { Ext.remove('extensions', x.id); UI.refresh(); }, 'trash');
     });
   }
 
@@ -190,7 +230,7 @@ var Account = (function () {
       var ed = row(s, 'orbit', '', '', function () { Playback.eightD(!Playback.eightD()); paint8d(); });
       function paint8d() {
         ed.querySelector('.t').textContent = '8D audio: ' + (Playback.eightD() ? 'on' : 'off');
-        ed.querySelector('.s').textContent = 'Sound slowly circles around you. Free songs only: Spotify keeps its audio locked to outside apps.';
+        ed.querySelector('.s').textContent = 'Sound slowly circles around you. Plays by itself on every song that supports it (free songs; Spotify keeps its audio locked to outside apps).';
         ed.classList.toggle('on', Playback.eightD());
       }
       paint8d();

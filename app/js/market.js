@@ -2,10 +2,10 @@
 // spicetify-themes, each with a manifest.json, same source the Spicetify Marketplace uses) and installs
 // into the active profile. Themes apply their color.ini scheme through the --spice-* variables the whole
 // app is styled with; a theme's user.css targets the desktop client, so it is optional.
-// Extensions run against a Spicetify-compatible API subset; ones built for newer browsers than this TV's
-// engine are detected at install and kept disabled.
+// Extensions run against a Spicetify-compatible API subset. Most are written for newer browsers than this TV's
+// Chrome 53, so they are converted on the TV with Babel (loaded only while installing) and stored converted.
 var Ext = (function () {
-  var topbar = [], menus = [];
+  var topbar = [], menus = [], modal = null, muted = 0;
   var GH = 'https://api.github.com/search/repositories?sort=stars&order=desc&per_page=60&q=topic:';
   var VARS = ['text', 'subtext', 'main', 'main-elevated', 'highlight', 'highlight-elevated', 'sidebar', 'player', 'card', 'shadow',
     'selected-row', 'button', 'button-active', 'button-disabled', 'tab-active', 'notification', 'notification-error', 'misc'];
@@ -117,27 +117,81 @@ var Ext = (function () {
       return Object.keys(parseIni(r[1]));
     });
   }
-  // Fetches an extension's script and tells whether this TV's engine can run it, before installing.
+  // ---- extensions ----
+  // Parts of the Spicetify API this app provides (see shim below). Anything else an extension touches only
+  // exists in Spotify desktop's interface, so that part of it does nothing here.
+  var PROVIDED = ['Player', 'showNotification', 'Config', 'LocalStorage', 'Menu', 'Topbar', 'Playbar', 'URI', 'Platform', 'Mousetrap',
+    'CosmosAsync', 'PopupModal', 'ContextMenu', 'Queue', 'Keyboard', 'SVGIcons', 'colorExtractor'];
+  var DESKTOP = { React: 'its interface (React)', ReactDOM: 'its interface (React)', ReactComponent: 'Spotify’s interface parts', Panel: 'side panels',
+    GraphQL: 'Spotify’s private data API', Locale: 'translations', ReactHook: 'its interface (React)', Tippy: 'tooltips', AppTitle: 'the window title' };
+  // Which parts of the Spicetify API (and of Spicetify.Player / Spicetify.Platform) the code touches.
+  function members(code, prefix) {
+    var seen = {}, m, re = new RegExp(prefix + '\\??\\.\\s*([A-Za-z_$][\\w$]*)', 'g');
+    while ((m = re.exec(code))) seen[m[1]] = 1;
+    // const { Player, React } = Spicetify (but not "= Spicetify.Something")
+    var d = new RegExp('\\{([^{}]{1,300})\\}\\s*=\\s*(?:window\\.)?' + prefix + '\\b(?!\\s*\\??\\.)', 'g');
+    while ((m = d.exec(code))) m[1].split(',').forEach(function (p) { var k = p.split(':')[0].trim(); if (/^[A-Za-z_$][\w$]*$/.test(k)) seen[k] = 1; });
+    return Object.keys(seen);
+  }
+  function missing(code) {
+    var out = [];
+    function add(w) { if (out.indexOf(w) < 0) out.push(w); }
+    members(code, 'Spicetify').forEach(function (k) { if (PROVIDED.indexOf(k) < 0) add(DESKTOP[k] || 'other Spotify desktop features'); });
+    members(code, 'Spicetify\\.Platform').forEach(function (k) { if (k !== 'version' && k !== 'History') add('Spotify desktop’s internals'); });
+    if (!window.Spicetify) shim();
+    var P = Object.keys(window.Spicetify.Player);
+    members(code, 'Spicetify\\.Player').forEach(function (k) { if (P.indexOf(k) < 0) add('some player controls'); });
+    return out;
+  }
+  function compiles(code) { try { new Function('Spicetify', code); return true; } catch (e) { return !(e instanceof SyntaxError); } }
+
+  // Babel is 3 MB, so it is loaded on first use and released a minute after the last conversion.
+  var babel = null, babelFree = null;
+  function loadBabel() {
+    clearTimeout(babelFree);
+    babelFree = setTimeout(function () { babel = null; try { delete window.Babel; } catch (e) { window.Babel = undefined; } }, 60000);
+    if (babel) return babel;
+    babel = new Promise(function (res, rej) {
+      if (window.Babel) return res(window.Babel);
+      var s = document.createElement('script'); s.src = 'js/vendor/babel.min.js';
+      s.onload = function () { s.parentNode.removeChild(s); window.Babel ? res(window.Babel) : rej(new Error('The converter didn’t load')); };
+      s.onerror = function () { babel = null; rej(new Error('The converter didn’t load')); };
+      document.head.appendChild(s);
+    });
+    return babel;
+  }
+  // Code this TV can run: unchanged when it already parses, otherwise converted (to Chrome 51, a margin below
+  // the TV's 53).
+  function convert(code) {
+    if (compiles(code)) return Promise.resolve(code);
+    return loadBabel().then(function (B) {
+      var out = B.transform(code, { presets: [['env', { targets: { chrome: '51' }, modules: false }]], sourceType: 'script', compact: true, comments: false }).code;
+      if (!compiles(out)) throw new Error('still not runnable');
+      return out;
+    }).catch(function (e) { Log.add('convert fail', e.message); throw new Error('This extension couldn’t be converted for this TV (' + e.message.split('\n')[0].slice(0, 80) + ')'); });
+  }
+  // Downloads, converts and checks an extension before installing: { code, missing }.
   function checkExtension(m) {
     if (!m.main) return Promise.reject(new Error('This extension has no script'));
-    return (m._code ? Promise.resolve(m._code) : text(abs(m.repo, m.branch, m.main))).then(function (code) { m._code = code; return compiles(code); });
+    if (m._check) return m._check;
+    m._check = text(abs(m.repo, m.branch, m.main)).then(function (src) {
+      return convert(src).then(function (code) { return { code: code, missing: missing(src) }; });
+    });
+    m._check.catch(function () { m._check = null; });
+    return m._check;
   }
-
-  // ---- extensions ----
-  function compiles(code) { try { new Function('Spicetify', code); return true; } catch (e) { return !(e instanceof SyntaxError); } }
   function run(x) {
     try { new Function('Spicetify', x.code)(window.Spicetify); }
-    catch (e) { console.error('extension', x.name, e); UI.toast(x.name + ' failed: ' + e.message); }
+    catch (e) { console.error('extension', x.name, e); Log.add('extension', x.name, e.message); UI.toast(x.name + ' hit a problem: ' + e.message); }
   }
   function installExtension(m) {
-    if (!m.main) return Promise.reject(new Error('This extension has no script'));
-    return (m._code ? Promise.resolve(m._code) : text(abs(m.repo, m.branch, m.main))).then(function (code) {
-      var ok = compiles(code), d = db(), id = m.repo + '#' + m.name;
+    return checkExtension(m).then(function (r) {
+      var d = db(), id = m.repo + '#' + m.name;
       d.extensions = d.extensions.filter(function (x) { return x.id !== id; });
-      d.extensions.push({ id: id, name: m.name, author: m.owner, preview: m.preview, code: code, on: ok, compatible: ok });
+      d.extensions.push({ id: id, name: m.name, author: m.owner, preview: m.preview, code: r.code, on: true, compatible: true, missing: r.missing });
       save(d);
-      if (ok) run(d.extensions[d.extensions.length - 1]);
-      return ok;
+      run(d.extensions[d.extensions.length - 1]);
+      return r;
     });
   }
   function remove(kind, id) {
@@ -159,7 +213,15 @@ var Ext = (function () {
       togglePlay: Playback.toggle, play: Playback.resume, pause: Playback.pause, next: Playback.next, back: Playback.prev, seek: Playback.seek,
       setVolume: Playback.volume, getVolume: function () { return Playback.volume(); },
       getShuffle: function () { return Playback.state.shuffle; }, setShuffle: Playback.setShuffle, toggleShuffle: function () { Playback.setShuffle(!Playback.state.shuffle); },
-      getHeart: function () { return Library.isLiked(Playback.state.track); }, toggleHeart: function () { if (Playback.state.track) Library.toggleLike(Playback.state.track); },
+      getHeart: function () { return Cat.isLiked(Playback.state.track); }, toggleHeart: function () { if (Playback.state.track) Cat.toggleLike(Playback.state.track); },
+      getRepeat: function () { return ['off', 'all', 'track'].indexOf(Playback.state.repeat); }, setRepeat: function (n) { Playback.setRepeat(['off', 'all', 'track'][n] || 'off'); },
+      toggleRepeat: function () { Player.setRepeat((Player.getRepeat() + 1) % 3); },
+      skipBack: function (ms) { Playback.skipBy(-(ms || 15000)); }, skipForward: function (ms) { Playback.skipBy(ms || 15000); },
+      getMute: function () { return Playback.volume() === 0; }, setMute: function (on) { if (on) { muted = Playback.volume(); Playback.volume(0); } else Playback.volume(muted || 0.8); },
+      toggleMute: function () { Player.setMute(!Player.getMute()); },
+      increaseVolume: function () { Playback.volume(Playback.volume() + 0.1); }, decreaseVolume: function () { Playback.volume(Playback.volume() - 0.1); },
+      playUri: function (uri) { return /^spotify:(album|playlist|artist):/.test(uri) ? Playback.playContext({ uri: uri }) : Promise.reject(new Error('Not available in TuneDeck')); },
+      formatTime: UI.fmt,
       addEventListener: function (type, fn) {
         if (type === 'songchange') Playback.on('track', function () { fn({ type: type, data: Player.data }); });
         else if (type === 'onplaypause') Playback.on('state', function () { fn({ type: type, data: Player.data }); });
@@ -174,6 +236,33 @@ var Ext = (function () {
       Menu: { Item: function (label, active, onClick) { this.register = function () { menus.push({ label: label, onClick: onClick }); }; this.deregister = function () {}; }, SubMenu: function () { this.register = function () {}; } },
       Topbar: { Button: function (label, icon, onClick) { topbar.push({ label: label, onClick: onClick }); this.element = document.createElement('button'); } },
       URI: { fromString: function (s) { var p = String(s).split(':'); return { type: p[1], id: p[2], uri: s, toString: function () { return s; } }; } },
+      Playbar: { Button: function (label, icon, onClick) { var b = { label: label, onClick: function () { onClick(b); } }; this.register = function () { topbar.push(b); }; this.deregister = function () {}; this.element = document.createElement('button'); } },
+      ContextMenu: { Item: function (name, onClick) { this.register = function () { menus.push({ label: name, onClick: onClick }); }; this.deregister = function () {}; }, SubMenu: function () { this.register = function () {}; } },
+      // Spotify Web API calls go through this app's sign-in; Spotify desktop's private endpoints don't exist here.
+      CosmosAsync: (function () {
+        function req(method) {
+          return function (url, body) {
+            var m = /^https:\/\/api\.spotify\.com\/v1(\/.*)$/.exec(url || '');
+            if (!m || !SpotifyApi.linked()) return Promise.reject(new Error('Not available in TuneDeck: ' + url));
+            return SpotifyApi.call(method, m[1], body == null ? null : body);
+          };
+        }
+        return { get: req('GET'), post: req('POST'), put: req('PUT'), del: req('DELETE') };
+      })(),
+      PopupModal: {
+        display: function (o) {
+          o = o || {};
+          var body = typeof o.content === 'string' ? o.content : '';
+          var d = UI.dialog(o.title || '', body, [{ label: 'Close', back: true }]);
+          if (o.content && o.content.nodeType) d.el.querySelector('.dbody').appendChild(o.content);
+          modal = d;
+        },
+        hide: function () { if (modal) modal.close(); modal = null; }
+      },
+      Queue: { get nextTracks() { return Playback.queue().slice(Playback.index() + 1).map(function (t) { return { contextTrack: { uri: t.uri, metadata: { title: t.name } } }; }); } },
+      Keyboard: { registerShortcut: function () {}, _deregisterShortcut: function () {} },
+      SVGIcons: {},
+      colorExtractor: function () { var c = getComputedStyle(document.documentElement).getPropertyValue('--accent-art').trim() || '#3d3360'; return Promise.resolve({ VIBRANT: c, PROMINENT: c, DESATURATED: c, LIGHT_VIBRANT: c, DARK_VIBRANT: c, VIBRANT_NON_ALARMING: c }); },
       Platform: { version: CFG.version, History: { push: function () {}, listen: function () {} } },
       Mousetrap: { bind: function () {} }, React: null, ReactDOM: null
     };

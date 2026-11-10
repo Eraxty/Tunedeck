@@ -17,12 +17,19 @@ var Focus = (function () {
     return { x: x, y: y, w: el.offsetWidth, h: el.offsetHeight };
   }
 
+  function scrollTo(p, off) {
+    var inner = p.firstElementChild, vert = p.classList.contains('vs');
+    p._off = off;
+    inner.style.transform = vert ? 'translate3d(0,' + (-off) + 'px,0)' : 'translate3d(' + (-off) + 'px,0,0)';
+  }
   function scrollInto(el) {
     var p = el.parentNode;
     while (p && p !== document.body) {
       if (p.classList && (p.classList.contains('vs') || p.classList.contains('hs'))) {
         var inner = p.firstElementChild, vert = p.classList.contains('vs');
         var o = offsetIn(el, inner), view = vert ? p.clientHeight : p.clientWidth, size = vert ? inner.scrollHeight : inner.scrollWidth;
+        // Rows have side padding (room for the focus ring) that the cards must not end up under.
+        if (!vert) { if (p._pad == null) { var cs = getComputedStyle(p); p._pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight); } view -= p._pad; }
         var pos = vert ? o.y : o.x, len = vert ? o.h : o.w, cur0 = p._off || 0, pad = vert ? 120 : 80, off = cur0;
         // Shelves on a vertical page snap the focused row near the top, like the TV app.
         var row = vert ? el.closest('.shelf') : null;
@@ -30,53 +37,73 @@ var Focus = (function () {
         else if (pos - cur0 < pad) off = pos - pad;
         else if (pos + len - cur0 > view - pad) off = pos + len - view + pad;
         off = Math.max(0, Math.min(off, Math.max(0, size - view)));
-        if (off !== cur0) {
-          p._off = off;
-          inner.style.transform = vert ? 'translate3d(0,' + (-off) + 'px,0)' : 'translate3d(' + (-off) + 'px,0,0)';
-        }
+        if (off !== cur0) scrollTo(p, off);
       }
       p = p.parentNode;
     }
   }
 
-  function set(el) {
+  // fromPointer: hovering focuses without scrolling, so a list never moves under a resting pointer.
+  function set(el, fromPointer) {
     if (!el) return;
     if (cur) cur.classList.remove('focus');
     cur = el; el.classList.add('focus');
     var row = el.closest('.hs'); if (row) row._last = el;
     var reg = el.closest('.region'); if (reg) reg._last = el;
-    scrollInto(el);
+    if (!fromPointer) scrollInto(el);
     if (handlers.focus) handlers.focus(el);
   }
 
-  function center(r) { return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+  // Skip hidden things: display:none (no offsetParent), disabled, and areas marked aria-hidden (e.g. the
+  // Now Playing panel while it is faded out).
+  function usable(el) { return el.offsetParent !== null && !el.disabled && !el.closest('[aria-hidden="true"]'); }
+  // The visible window of the vertical scroller an element sits in (or the screen).
+  function clip(el) {
+    var p = el.parentNode;
+    while (p && p !== document.body) { if (p.classList && p.classList.contains('vs')) return p.getBoundingClientRect(); p = p.parentNode; }
+    return { top: 0, bottom: window.innerHeight };
+  }
+  function onScreen(el) { var r = el.getBoundingClientRect(), c = clip(el); return r.bottom > c.top + 8 && r.top < c.bottom - 8; }
+
+  // Spatial navigation in the style of the W3C proposal: only elements past the current one in the pressed
+  // direction count, the nearest edge-to-edge wins, and elements lined up with the current one (overlapping
+  // across the direction) beat diagonal ones.
+  function score(dir, c, r) {
+    var vert = dir === 'up' || dir === 'down', gap, ov, mid;
+    if (dir === 'down') { if (r.top + r.height / 2 <= c.top + c.height / 2 + 2 || r.bottom <= c.bottom - 1) return -1; gap = r.top - c.bottom; }
+    else if (dir === 'up') { if (r.top + r.height / 2 >= c.top + c.height / 2 - 2 || r.top >= c.top + 1) return -1; gap = c.top - r.bottom; }
+    else if (dir === 'right') { if (r.left + r.width / 2 <= c.left + c.width / 2 + 2 || r.right <= c.right - 1) return -1; gap = r.left - c.right; }
+    else { if (r.left + r.width / 2 >= c.left + c.width / 2 - 2 || r.left >= c.left + 1) return -1; gap = c.left - r.right; }
+    if (vert) { ov = Math.min(c.right, r.right) - Math.max(c.left, r.left); mid = Math.abs(r.left + r.right - c.left - c.right) / 2; }
+    else { ov = Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top); mid = Math.abs(r.top + r.bottom - c.top - c.bottom) / 2; }
+    return Math.max(0, gap) + (ov > 0 ? 0 : 60 - ov * (vert ? 2 : 3)) + mid * 0.05;
+  }
 
   function move(dir) {
-    // Skip hidden things: display:none (no offsetParent), disabled, and areas marked aria-hidden (e.g. the
-    // Now Playing panel while it is faded out).
-    var all = [].slice.call(root().querySelectorAll('.f')).filter(function (e) { return e.offsetParent !== null && !e.disabled && !e.closest('[aria-hidden="true"]'); });
+    var all = [].slice.call(root().querySelectorAll('.f')).filter(usable);
     if (!all.length) return;
     if (!cur || all.indexOf(cur) < 0) return set(all[0]);
-    var c = center(cur.getBoundingClientRect()), best = null, bs = Infinity;
+    // After the pointer wheel scrolled the focused item out of sight, carry on from what is on screen.
+    var sc = cur.closest('.vs');
+    if (sc && !onScreen(cur)) {
+      var vis = all.filter(function (e) { return sc.contains(e) && onScreen(e); });
+      if (vis.length) return set(dir === 'up' ? vis[vis.length - 1] : vis[0]);
+    }
+    var c = cur.getBoundingClientRect(), best = null, bs = Infinity;
     all.forEach(function (el) {
       if (el === cur) return;
-      var r = el.getBoundingClientRect(), p = center(r), dx = p.x - c.x, dy = p.y - c.y, along, across;
-      if (dir === 'left') { along = -dx; across = Math.abs(dy); }
-      else if (dir === 'right') { along = dx; across = Math.abs(dy); }
-      else if (dir === 'up') { along = -dy; across = Math.abs(dx); }
-      else { along = dy; across = Math.abs(dx); }
-      if (along <= 4) return;
-      var score = along + across * (dir === 'up' || dir === 'down' ? 1.2 : 3);
-      if (score < bs) { bs = score; best = el; }
+      var s = score(dir, c, el.getBoundingClientRect());
+      if (s >= 0 && s < bs) { bs = s; best = el; }
     });
     if (!best) return;
-    function usable(el) { return el && el.offsetParent && !el.closest('[aria-hidden="true"]') && all.indexOf(el) >= 0; }
-    // Entering another area (library, main view, Now Playing, top bar, player bar) returns to where you were.
+    function ok(el) { return el && all.indexOf(el) >= 0; }
+    // Entering another area (library, main view, Now Playing, top bar, player bar) returns to where you were,
+    // when that spot is on screen and in the pressed direction.
     var reg = best.closest('.region');
-    if (reg && reg !== cur.closest('.region') && usable(reg._last)) { set(reg._last); return; }
+    if (reg && reg !== cur.closest('.region') && ok(reg._last) && onScreen(reg._last) && score(dir, c, reg._last.getBoundingClientRect()) >= 0) return set(reg._last);
     if (dir === 'up' || dir === 'down') {
       var row = best.closest('.hs');
-      if (row && row !== cur.closest('.hs') && usable(row._last)) best = row._last;
+      if (row && row !== cur.closest('.hs') && ok(row._last)) best = row._last;
     }
     set(best);
   }
@@ -96,10 +123,29 @@ var Focus = (function () {
   }
   document.addEventListener('keydown', key);
 
-  // Pointer (LG Magic Remote) support: hovering focuses, clicking activates.
+  // Pointer (LG Magic Remote): hovering focuses, clicking activates, the wheel scrolls what is under it.
+  // Chrome repeats mouse events when content moves under a resting pointer; only real pointer movement
+  // counts (a new position, not just after a remote key), or lists would jump around while scrolling.
+  var px = -1, py = -1, moved = false, lastKey = 0;
+  document.addEventListener('keydown', function () { lastKey = Date.now(); moved = false; }, true);
+  document.addEventListener('mousemove', function (e) {
+    if (e.clientX === px && e.clientY === py) return;
+    px = e.clientX; py = e.clientY; moved = Date.now() - lastKey > 300;
+  });
   document.addEventListener('mouseover', function (e) {
+    if (!moved) return;
     var el = e.target.closest && e.target.closest('.f');
-    if (el && el !== cur && root().contains(el)) set(el);
+    if (el && el !== cur && root().contains(el) && usable(el)) set(el, true);
+  });
+  document.addEventListener('wheel', function (e) {
+    var p = e.target.closest && e.target.closest('.vs');
+    if (!p || !root().contains(p)) return;
+    e.preventDefault();
+    var dy = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? p.clientHeight : 1);
+    if (!dy) return;
+    var inner = p.firstElementChild, step = (dy > 0 ? 1 : -1) * Math.max(90, Math.min(Math.abs(dy), 400));
+    var max = Math.max(0, inner.scrollHeight - p.clientHeight), off = Math.max(0, Math.min(max, (p._off || 0) + step));
+    if (off !== (p._off || 0)) { scrollTo(p, off); if (handlers.scroll) handlers.scroll(p, off + p.clientHeight >= max - 400); }
   });
 
   return {

@@ -32,6 +32,14 @@ var Cat = (function () {
   }
   function artist(a) { return { kind: 'artist', id: a.id, uri: a.uri, name: a.name, avatar: imgs(a.images), avatar_big: imgs(a.images, true), followers: null, genres: a.genres || [] }; }
   function clean(list) { return list.filter(Boolean); }
+  // Spotify-made playlists (Daily Mix, artist Mixes, Discover Weekly...) can't be read by apps like this one,
+  // but they still play. Their name comes from Spotify's public embed info.
+  function mix(id, cover) {
+    var base = { kind: 'playlist', id: id, uri: 'spotify:playlist:' + id, name: 'Spotify mix', owner: 'Spotify', own: false, cover: cover || '', cover_big: cover || '', count: 0, description: '', mix: true };
+    return fetch('https://open.spotify.com/oembed?url=spotify:playlist:' + id).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
+      if (j.title) base.name = j.title; if (j.thumbnail_url && !cover) { base.cover = base.cover_big = j.thumbnail_url; } return base;
+    }, function () { return base; });
+  }
   function spAll(path, cap, map) { return SpotifyApi.getAll(path, cap).then(function (items) { return clean(items.map(map)); }); }
 
   // ---------- liked songs (Spotify keeps a local set for instant heart states) ----------
@@ -81,12 +89,16 @@ var Cat = (function () {
         if (!next) return { item: al, tracks: list };
         return SpotifyApi.getAll(next, 500).then(function (rest) { return { item: al, tracks: list.concat(clean(rest.map(function (t) { return track(t, a); }))) }; });
       });
+      var MIXNOTE = 'Spotify doesn’t let apps list the songs of its own mixes and playlists. Press Play to listen to it.';
       return SpotifyApi.get('/playlists/' + id).then(function (p) {
         var pl = playlist(p), items = p.items || p.tracks;
-        if (!items || !items.items) return { item: pl, tracks: null, note: 'Spotify only lets apps list the songs of playlists you own. Press Play to listen to it.' };
+        if (!items || !items.items) return { item: pl, tracks: null, note: pl.owner === 'Spotify' ? MIXNOTE : 'Spotify only lets apps list the songs of playlists you own. Press Play to listen to it.' };
         var list = clean(items.items.map(function (i) { return track(i.item || i.track); }));
         if (!items.next) return { item: pl, tracks: list };
         return SpotifyApi.getAll(items.next, 1000).then(function (rest) { return { item: pl, tracks: list.concat(clean(rest.map(function (i) { return track(i.item || i.track); }))) }; });
+      }, function (e) {
+        if (e.code !== 404 && e.code !== 403) throw e;
+        return mix(id).then(function (m) { return { item: m, tracks: null, note: MIXNOTE }; });
       });
     },
 
@@ -213,7 +225,7 @@ var Cat = (function () {
           var seen = {}, out = [];
           (j.items || []).forEach(function (i) {
             var c = i.context, t = i.track;
-            if (c && /^spotify:(album|playlist|artist):/.test(c.uri)) { if (!seen[c.uri]) { seen[c.uri] = 1; out.push({ kind: c.type, id: c.uri.split(':')[2], uri: c.uri, pending: true }); } }
+            if (c && /^spotify:(album|playlist|artist):/.test(c.uri)) { if (!seen[c.uri]) { seen[c.uri] = 1; out.push({ kind: c.type, id: c.uri.split(':')[2], uri: c.uri, pending: true, art: t && t.album ? imgs(t.album.images) : '' }); } }
             else if (t && t.album && !seen[t.album.uri]) { seen[t.album.uri] = 1; out.push(album(t.album)); }
           });
           // Contexts only come back as URIs: fetch their names and covers (single-ID endpoints in dev mode).
@@ -222,7 +234,7 @@ var Cat = (function () {
             var path = x.kind === 'album' ? '/albums/' : x.kind === 'artist' ? '/artists/' : '/playlists/';
             return SpotifyApi.get(path + x.id + (x.kind === 'playlist' ? '?fields=id,uri,name,images,owner,description,collaborative,items.total,tracks.total' : '')).then(function (d) {
               return x.kind === 'album' ? album(d) : x.kind === 'artist' ? artist(d) : playlist(d);
-            }, function () { return null; });
+            }, function () { return x.kind === 'playlist' ? mix(x.id, x.art) : null; });
           })).then(clean);
         });
       });

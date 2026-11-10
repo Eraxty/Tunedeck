@@ -14,11 +14,12 @@ var Playback = (function () {
   }
 
   // ---------------- Spotify engine ----------------
-  var sp = { player: null, device: null, ready: null, status: 'off', error: '', pos: 0, at: 0, dur: 0, next: [], prev: [] };
+  var sp = { player: null, device: null, ready: null, status: 'off', error: '', pos: 0, at: 0, dur: 0, next: [], prev: [], ctx: null };
   function spTrack(t) {
     if (!t) return null;
     var imgs = (t.album && t.album.images) || [], big = imgs[0] ? imgs[0].url : '', small = imgs.length ? imgs[imgs.length - 1].url : big;
-    imgs.forEach(function (i) { if (i.height && i.height <= 300 && i.height >= 200) small = small || i.url; });
+    // The 300px image for small covers: the 64px one looks soft on a TV.
+    imgs.forEach(function (i) { if (i.height && i.height <= 320 && i.height >= 200) small = i.url; });
     var aid = t.artists && t.artists[0] && t.artists[0].uri ? t.artists[0].uri.split(':')[2] : null;
     return { uri: t.uri, id: t.id, name: t.name, artist_names: (t.artists || []).map(function (a) { return a.name; }), artist_id: aid,
       album_name: t.album ? t.album.name : '', album_id: t.album && t.album.uri ? t.album.uri.split(':')[2] : null,
@@ -54,23 +55,34 @@ var Playback = (function () {
   function spState(s) {
     if (!s) { Log.add('state null (playback moved to another device)'); state.paused = true; emit('state', state); return; }
     state.engine = 'spotify';
-    sp.pos = s.position; sp.at = Date.now(); sp.dur = s.duration;
+    sp.pos = s.position; sp.at = Date.now(); sp.dur = s.duration; sp.ctx = s.context && s.context.uri;
     sp.next = (s.track_window.next_tracks || []).map(spTrack); sp.prev = (s.track_window.previous_tracks || []).map(spTrack);
     state.paused = s.paused; state.buffering = !!s.loading; state.shuffle = s.shuffle; state.repeat = ['off', 'all', 'track'][s.repeat_mode] || 'off';
     setTrack(spTrack(s.track_window.current_track));
     emit('state', state); emit('queue');
   }
   function spDev(path) { return path + (path.indexOf('?') < 0 ? '?' : '&') + 'device_id=' + sp.device; }
-  function spPlay(body) {
+  // quiet: reject instead of showing the error, so the caller can try something else.
+  function spPlay(body, quiet) {
     return spInit().then(function () {
       if (sp.player.activateElement) sp.player.activateElement();
       return SpotifyApi.call('PUT', spDev('/me/player/play'), body);
     }).catch(function (e) {
       Log.add('play fail', e.message, e.code);
       // The device can drop off Spotify's list after the TV sleeps; reconnect once and retry.
-      if (e.code === 404 && sp.player) { sp.ready = null; sp.player.disconnect(); sp.player = null; return spPlay(body); }
+      if (e.code === 404 && sp.player && !/context|offset/i.test(e.message)) { sp.ready = null; sp.player.disconnect(); sp.player = null; return spPlay(body, quiet); }
+      if (quiet) throw e;
       emit('error', { track: null, message: e.message });
     });
+  }
+  // Plays song i of the queue list shown to the user. Inside an album or playlist, Spotify starts the context
+  // at that song (the rest of the context follows); songs added with "Add to queue" or a context Spotify
+  // refuses fall back to playing the listed songs from that one on.
+  function spJump(i, list) {
+    var t = list[i]; if (!t) return;
+    var uri = sp.ctx || (context && context.uri), rest = { uris: list.slice(i, i + 100).map(function (x) { return x.uri; }) };
+    if (uri && /^spotify:(album|playlist):|:collection$/.test(uri)) return spPlay({ context_uri: uri, offset: { uri: t.uri } }, true).catch(function () { return spPlay(rest); });
+    return spPlay(rest);
   }
 
   // ---------------- Audius engine ----------------
@@ -132,9 +144,10 @@ var Playback = (function () {
   }
 
   // 8D: each element goes through a stereo panner swept left-right by a slow oscillator (Web Audio does the
-  // movement, no JavaScript runs per frame). Off by default; only for free songs, Spotify audio is locked.
+  // movement, no JavaScript runs per frame). On by default wherever it can work: free songs only, Spotify audio
+  // is locked to outside apps.
   var ac = null, sweep = null, routed = [false, false];
-  function eightD() { return Store.get('eightD', false); }
+  function eightD() { return Store.get('eightD', true); }
   function route(a) {
     if (!eightD() || !(window.AudioContext || window.webkitAudioContext)) return;
     try {
@@ -254,9 +267,10 @@ var Playback = (function () {
       if (t.src.source === 'spotify') { spInit().then(function () { return SpotifyApi.call('POST', spDev('/me/player/queue?uri=' + encodeURIComponent(t.uri))); }).then(function () { emit('queue'); }, function (e) { emit('error', { message: e.message }); }); return; }
       queue.splice(idx + 1, 0, t); emit('queue'); if (idx < 0) { idx = 0; auLoad(); }
     },
-    jump: function (i) {
-      if (isSp()) { var n = 0; (function skip() { if (n++ < i && sp.player) sp.player.nextTrack().then(function () { setTimeout(skip, 250); }); })(); return; }
-      if (queue[i]) { idx = i; auLoad(); emit('queue'); }
+    // i is a position in list (what the queue page shows: the current song first).
+    jump: function (i, list) {
+      if (isSp()) return spJump(i, list || []);
+      if (queue[i]) { endCrossfade(); idx = i; auLoad(); emit('queue'); }
     },
     queue: function () { return isSp() ? (state.track ? [state.track].concat(sp.next) : []) : queue.slice(); },
     // The full upcoming queue. The SDK only knows the next couple of songs, so Spotify's Web API is asked.

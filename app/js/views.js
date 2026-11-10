@@ -200,7 +200,7 @@
       var c = r.item, tracks = r.tracks, ctx = { kind: c.kind, id: c.id, uri: c.uri, name: c.name, cover: c.cover };
       root.innerHTML = '';
       var total = (tracks || []).reduce(function (a, t) { return a + t.duration; }, 0);
-      var sub = '<b>' + esc(c.owner) + '</b>' + (c.year ? ' · ' + c.year : '') + ' · ' + (tracks ? tracks.length : c.count) + ' songs' + (total ? ' · ' + Math.round(total / 60000) + ' min' : '');
+      var n = tracks ? tracks.length : c.count, sub = '<b>' + esc(c.owner) + '</b>' + (c.year ? ' · ' + c.year : '') + (n ? ' · ' + n + ' songs' : '') + (total ? ' · ' + Math.round(total / 60000) + ' min' : '');
       var act = UI.pageHeader(root, { over: c.kind === 'album' ? (c.type === 'single' ? 'Single' : 'Album') : 'Playlist', title: c.name, cover: c.cover_big || c.cover, desc: (c.description || '').slice(0, 180), sub: sub });
       UI.actionBtn(act, 'play', '', function () { if (tracks && tracks.length) Playback.play(tracks, null, ctx); else if (c.uri) Playback.playContext(ctx); }, 'primary default');
       UI.actionBtn(act, 'shuffle', 'Shuffle', function () { Playback.setShuffle(true); if (tracks && tracks.length) Playback.play(tracks, Math.floor(Math.random() * tracks.length), ctx); else Playback.playContext(ctx); });
@@ -210,7 +210,7 @@
       function paintSave(on) { sv.innerHTML = Icon(on ? 'check' : 'plus', 30) + '<span>' + (on ? 'Saved' : 'Save') + '</span>'; sv.classList.toggle('on', on); }
       Cat.loadSavedFlags(c).then(paintSave);
       if (c.owner_id) UI.actionBtn(act, 'user', c.owner, function () { UI.go('artist', c.owner_id); });
-      if (!tracks) { empty(root, 'Songs aren’t listed for this playlist', r.note || ''); }
+      if (!tracks) { empty(root, c.mix ? 'Made for you by Spotify' : 'Songs aren’t listed for this playlist', r.note || ''); }
       else UI.trackList(root, tracks, { onPick: function (i) { Playback.play(tracks, i, ctx); }, noCover: c.kind === 'album', noAlbum: c.kind === 'album' });
       UI.lazy(root); Focus.first(root);
     }, function (e) { root.innerHTML = ''; empty(root, 'Couldn’t open this', e.message, { label: 'Go back', onClick: UI.back }); Focus.first(root); });
@@ -274,7 +274,7 @@
       var rest = q.slice(cur + 1);
       if (rest.length) {
         body.appendChild(h('h2', 'sub-h', 'Next up' + (Playback.context() && Playback.context().name ? ' from ' + esc(Playback.context().name) : '') + ' · ' + rest.length + ' songs'));
-        UI.trackList(body, rest, { onPick: function (i) { Playback.jump(cur + 1 + i); UI.toast('Skipping to ' + rest[i].name); setTimeout(UI.refresh, 1500); } });
+        UI.trackList(body, rest, { onPick: function (i) { Playback.jump(cur + 1 + i, q); UI.toast('Playing ' + rest[i].name); } });
       }
       UI.lazy(body); Focus.first(root);
     });

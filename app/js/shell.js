@@ -111,6 +111,7 @@ var UI = (function () {
       return r;
     }
     list.more = function (el) { if (el._more) { el._more = false; more(); } };
+    list.moreAll = function () { var last = list.lastChild && list.lastChild.firstChild; if (last && last._more) { last._more = false; more(); } };
     list.mark = function (i, missing) { var t = tracks[i]; if (t && t._row) t._row.classList.toggle('missing', missing); };
     more();
     return list;
@@ -173,8 +174,11 @@ var UI = (function () {
     setTimeout(function () { Focus.first(el); }, 0);
     return { el: el, close: close };
   }
+  // A button with back: true also runs when Back is pressed.
   function dialog(title, body, buttons) {
-    var d = layer('dialog-layer', '<div class="dialog"><h2>' + esc(title) + '</h2><div class="dbody">' + (body || '') + '</div><div class="dbtns"></div></div>');
+    var onBack = (buttons || []).filter(function (b) { return b.back; })[0];
+    var d = layer('dialog-layer', '<div class="dialog"><h2>' + esc(title) + '</h2><div class="dbody">' + (body || '') + '</div><div class="dbtns"></div></div>',
+      { onBack: onBack && onBack.onClick });
     (buttons || []).forEach(function (b, i) {
       var e = h('button', 'pill f' + (i === 0 ? ' primary default' : ''), esc(b.label));
       e.onclick = function () { if (b.keep !== true) d.close(); if (b.onClick) b.onClick(d); };
@@ -202,8 +206,8 @@ var UI = (function () {
       lazy(list);
     });
   }
-  function askText(title, value, doneLabel, onDone) {
-    var d = layer('dialog-layer', '<div class="dialog wide"><h2>' + esc(title) + '</h2><div class="kbd-field"></div><div class="kbd-host"></div></div>');
+  function askText(title, value, doneLabel, onDone, onCancel) {
+    var d = layer('dialog-layer', '<div class="dialog wide"><h2>' + esc(title) + '</h2><div class="kbd-field"></div><div class="kbd-host"></div></div>', { onBack: onCancel });
     var field = $('.kbd-field', d.el); field.textContent = value || '';
     var kb = Keyboard.create({ value: value || '', onChange: function (v) { field.textContent = v; }, onDone: function (v) { if (!v.trim()) return toast('Type a name first'); d.close(); onDone(v.trim()); }, doneLabel: doneLabel });
     $('.kbd-host', d.el).appendChild(kb);
@@ -233,10 +237,13 @@ var UI = (function () {
   }
 
   // ---------- Your Library panel ----------
+  // Selecting "Your Library" collapses the panel to a rail of covers (and back), like Spotify desktop.
   function buildLibrary() {
-    var p = els.lib;
-    p.innerHTML = '<div class="lib-top"><h2>Your Library</h2><button class="ico-btn f lib-new">' + Icon('plus', 28) + '</button></div><div class="lchips"></div><div class="llist vs"><div class="in"></div></div>';
-    $('.lib-new', p).onclick = function () { askText('Name your playlist', 'My playlist', 'Create', function (n) { Lib.createPlaylist(n).then(function () { toast('Created ' + n); buildLibrary(); }, function (e) { toast(e.message); }); }); };
+    var p = els.lib, mini = !!Store.get('libMini', false);
+    document.body.classList.toggle('lib-min', mini);
+    p.innerHTML = '<div class="lib-top"><button class="lib-head f">' + Icon('library', 30) + '<h2>Your Library</h2><span class="lib-hint">' + Icon(mini ? 'expand' : 'back', 22) + '</span></button></div>' +
+      '<div class="lchips"></div><div class="llist vs"><div class="in"></div></div>';
+    $('.lib-head', p).onclick = function () { Store.set('libMini', !mini); buildLibrary(); setTimeout(function () { Focus.set($('.lib-head', els.lib)); }, 0); };
     var chips = $('.lchips', p);
     [['all', 'All'], ['playlists', 'Playlists'], ['albums', 'Albums'], ['artists', 'Artists']].forEach(function (c) {
       var b = h('button', 'chip small f' + (libFilter === c[0] ? ' on' : ''), c[1]);
@@ -275,7 +282,7 @@ var UI = (function () {
     ctlBtn(parent, 'repeat', cycleRepeat, 'c-repeat', s);
   }
   function seekRow(parent) {
-    var r = h('div', 'seek', '<span class="cur">0:00</span><button class="seekbar f"><span class="sbar"><span class="sfill"></span></span><span class="shint">Left / right: 10s</span></button><span class="dur">0:00</span>');
+    var r = h('div', 'seek', '<span class="tpos">0:00</span><button class="seekbar f"><span class="sbar"><span class="sfill"></span></span><span class="shint">Left / right: 10s</span></button><span class="tdur">0:00</span>');
     parent.appendChild(r); seekKeys($('.seekbar', r)); return r;
   }
   function buildBar() {
@@ -329,16 +336,32 @@ var UI = (function () {
     syncNpv();
   }
 
-  // Blurred backdrops: the cover is drawn into a tiny canvas that CSS stretches over the screen. The GPU's
-  // smoothing does the blur, and the layer costs a few KB instead of a full-screen texture.
+  // Blurred backdrops: the full-size cover is blurred into a 384x216 canvas that CSS stretches over the
+  // screen (a few hundred KB of texture instead of a full-screen one). Canvas filters give a true Gaussian
+  // blur; without them the cover is shrunk and scaled back up in steps, each step smoothing like a blur.
+  var tmpA = document.createElement('canvas'), tmpB = document.createElement('canvas');
   function paintBlur(canvas, img) {
-    var c = canvas.getContext('2d'), w = canvas.width, hgt = canvas.height, s = Math.max(w / img.width, hgt / img.height);
+    var w = canvas.width, hgt = canvas.height, c = canvas.getContext('2d'), s = Math.max(w / img.width, hgt / img.height);
+    var dw = img.width * s, dh = img.height * s, dx = (w - dw) / 2, dy = (hgt - dh) / 2, r = Math.round(w / 48);
     c.clearRect(0, 0, w, hgt);
-    c.drawImage(img, (w - img.width * s) / 2, (hgt - img.height * s) / 2, img.width * s, img.height * s);
+    if (typeof c.filter === 'string') {
+      // Drawn a little oversized so the blur doesn't pull transparent edges in.
+      c.filter = 'blur(' + r + 'px)'; c.drawImage(img, dx - 2 * r, dy - 2 * r, dw + 4 * r, dh + 4 * r); c.filter = 'none';
+      return;
+    }
+    var sw = Math.ceil(w / 8), sh = Math.ceil(hgt / 8);
+    tmpA.width = sw; tmpA.height = sh; tmpA.getContext('2d').drawImage(img, dx / 8, dy / 8, dw / 8, dh / 8);
+    var src = tmpA, dst = tmpB;
+    while (sw * 2 < w) {
+      sw *= 2; sh *= 2; dst.width = sw; dst.height = sh;
+      dst.getContext('2d').drawImage(src, 0, 0, sw, sh);
+      var t = src; src = dst; dst = t;
+    }
+    c.drawImage(src, 0, 0, w, hgt);
   }
   var bgFlip = 0, bgImg = null;
   function setBackground(t) {
-    var layers = $$('#bg .bgimg'), next = layers[bgFlip ^ 1], prev = layers[bgFlip], url = t && (t.cover_small || t.album_cover_url);
+    var layers = $$('#bg .bgimg'), next = layers[bgFlip ^ 1], prev = layers[bgFlip], url = t && (t.cover_big || t.album_cover_url);
     if (!url) { prev.style.opacity = 0; next.style.opacity = 0; bgImg = null; return; }
     var img = new Image();
     img.onload = function () { bgImg = img; paintBlur(next, img); next.style.opacity = 1; prev.style.opacity = 0; bgFlip ^= 1; if (els.player) paintBlur($('.pl-bg', els.player), img); };
@@ -456,12 +479,11 @@ var UI = (function () {
     if (!Playback.state.track) return toast('Play something first');
     if (mode === 'lyrics') { var p = prefs(); if (!p.lyrics) { p.lyrics = true; Store.set('player', p); } }
     if (els.player) { applyPlayerMode(); return; }
-    var L = layer('full player', '<canvas class="pl-bg" width="96" height="54"></canvas><div class="pl-shade"></div>' +
+    var L = layer('full player', '<canvas class="pl-bg" width="384" height="216"></canvas><div class="pl-shade"></div>' +
       '<div class="pl-top"><button class="pill f pl-back">' + Icon('back', 28) + '<span>Back</span></button><div class="pl-from"></div><div class="pl-now"><span class="pn-c"></span><span><b class="pn-t"></b><span class="pn-a"></span></span></div>' +
       '<div class="pl-toggles"><button class="tog f t-cover">' + Icon('image', 26) + '<span>Cover</span></button><button class="tog f t-lyrics">' + Icon('lyrics', 26) + '<span>Lyrics</span></button>' +
       '<button class="tog f t-info">' + Icon('text', 26) + '<span>Info</span></button>' +
       '<button class="tog f t-dark">' + Icon('moon', 26) + '<span>Dark</span></button>' +
-      '<button class="tog f t-8d">' + Icon('orbit', 26) + '<span>8D</span></button>' +
       '<span class="pl-sync"><button class="tog f t-early">Earlier</button><span class="pl-off">0.0s</span><button class="tog f t-late">Later</button></span></div></div>' +
       '<div class="pl-body"><div class="pl-left"><div class="pl-art"></div><div class="pl-meta"><div class="pl-title"></div><div class="pl-artist"></div></div></div>' +
       '<div class="pl-lyrics"><div class="pl-view"><div class="pl-lines"></div></div><div class="pl-empty"></div></div></div>' +
@@ -478,10 +500,6 @@ var UI = (function () {
     $('.t-lyrics', L.el).onclick = function () { toggle('lyrics'); };
     $('.t-dark', L.el).onclick = function () { toggle('dark'); };
     $('.t-info', L.el).onclick = function () { toggle('info'); };
-    $('.t-8d', L.el).onclick = function () {
-      if (Playback.state.engine === 'spotify') return toast('8D only works on free songs: Spotify keeps its audio locked to outside apps');
-      var on = !Playback.eightD(); Playback.eightD(on); applyPlayerMode(); toast(on ? '8D on' : '8D off');
-    };
     // Holding OK on these repeats (the remote sends repeated key presses), for big corrections.
     $('.t-early', L.el).onclick = function () { nudge(100); };
     $('.t-late', L.el).onclick = function () { nudge(-100); };
@@ -497,8 +515,6 @@ var UI = (function () {
     var p = prefs();
     P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics); P.classList.toggle('dark', p.dark); P.classList.toggle('no-info', !p.info);
     $('.t-info', P).classList.toggle('on', p.info);
-    $('.t-8d', P).classList.toggle('on', Playback.state.engine !== 'spotify' && Playback.eightD());
-    $('.t-8d', P).classList.toggle('na', Playback.state.engine === 'spotify');
     $('.t-cover', P).classList.toggle('on', p.cover); $('.t-lyrics', P).classList.toggle('on', p.lyrics); $('.t-dark', P).classList.toggle('on', p.dark);
     lyr.idx = -2;
   }
@@ -549,7 +565,7 @@ var UI = (function () {
   // ---------- clock ----------
   // Runs 4 times a second (not every frame): the progress bar glides between updates with a CSS transition,
   // which keeps the TV's processor free for audio. Live collections avoid document queries.
-  var lastSec = -1, lastF = -1, fills = document.getElementsByClassName('sfill'), curs = document.getElementsByClassName('cur'), durs = document.getElementsByClassName('dur');
+  var lastSec = -1, lastF = -1, fills = document.getElementsByClassName('sfill'), curs = document.getElementsByClassName('tpos'), durs = document.getElementsByClassName('tdur');
   function tick() {
     var t = Playback.state.track;
     if (t) {
@@ -574,6 +590,8 @@ var UI = (function () {
     Playback.on('engine', function (sp) { if (sp.status === 'error') toast(sp.error); });
     Library.onChange(function (what) { if (what === 'playlists' || what === 'saved' || what === 'following') buildLibrary(); });
     Focus.on('focus', function (el) { var l = el.closest('.tracks'); if (l && l.more) l.more(el); });
+    // Wheel scrolling near the end of a long song list renders the next page too.
+    Focus.on('scroll', function (p, nearEnd) { if (nearEnd) $$('.tracks', p).forEach(function (l) { if (l.moreAll) l.moreAll(); }); });
     Focus.on('back', back);
     Focus.on('play', Playback.resume); Focus.on('pause', Playback.pause);
     Focus.on('ff', function () { Playback.skipBy(10000); }); Focus.on('rw', function () { Playback.skipBy(-10000); });
