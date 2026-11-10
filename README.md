@@ -58,8 +58,12 @@ redirect address keeps working.
 
 The full-screen player has **Cover**, **Lyrics**, **Info** (song name and artist) and **Dark** switches, in
 any combination, remembered per profile. **Settings → Lyrics delay for this TV** fixes lyrics that are always
-off by the same amount, for example with a soundbar. **Settings → Smooth transitions** fades songs into each
-other (0 to 12 seconds).
+off by the same amount, for example with a soundbar. **Settings → Smooth transitions** (0 to 12 seconds):
+free songs truly crossfade (overlap); Spotify songs fade out and in. **8D** (player or Settings) makes the
+sound circle around you, for free songs.
+
+If the TV feels slow, close other apps first (YouTube in particular stays in memory). The TV has about 1 GB
+of RAM and swaps when it runs out.
 
 Artist pages show the most popular songs and a **See all songs** button that collects every song from the
 artist's albums and singles.
@@ -81,5 +85,5 @@ artist's albums and singles.
 - An artist's "Popular" songs come from a search, as Spotify removed that endpoint for developer apps.
 - No music videos or Canvas loops: Spotify's player for other apps is audio-only, and its terms forbid
   pairing Spotify audio with other video.
-- No true Automix: that overlaps two songs, and Spotify's player for other apps plays one stream at a time.
-  Smooth transitions fade instead.
+- No crossfade overlap or 8D for Spotify songs: Spotify's player for other apps plays one stream at a time
+  and its audio can't be processed by the app. Both work on free songs.

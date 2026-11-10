@@ -33,6 +33,7 @@ var Icon = (function () {
     image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
     backspace: '<path d="M21 5H8l-6 7 6 7h13z"/><path d="m12 9 6 6M18 9l-6 6"/>',
     text: '<path d="M4 7V5h16v2M9 19h6M12 5v14"/>',
+    orbit: '<circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9"/><path d="m18 9 3 3 3-3M6 15l-3-3-3 3"/>',
     moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
     phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>'
   };

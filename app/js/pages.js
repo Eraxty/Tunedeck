@@ -185,8 +185,15 @@ var Account = (function () {
       function paintFade() {
         var ms = Playback.fade();
         fr.querySelector('.t').textContent = 'Smooth transitions: ' + (ms ? (ms / 1000) + ' seconds' : 'off');
-        fr.querySelector('.s').textContent = 'Press left or right. Songs fade out and the next fades in. (Spotify’s Automix overlaps two songs, which its player for other apps can’t do.)';
+        fr.querySelector('.s').textContent = 'Press left or right. Free songs truly crossfade (overlap). Spotify songs fade out and in, since Spotify’s player for other apps plays one song at a time.';
       }
+      var ed = row(s, 'orbit', '', '', function () { Playback.eightD(!Playback.eightD()); paint8d(); });
+      function paint8d() {
+        ed.querySelector('.t').textContent = '8D audio: ' + (Playback.eightD() ? 'on' : 'off');
+        ed.querySelector('.s').textContent = 'Sound slowly circles around you. Free songs only: Spotify keeps its audio locked to outside apps.';
+        ed.classList.toggle('on', Playback.eightD());
+      }
+      paint8d();
       fr._key = function (k) {
         if (k !== 'left' && k !== 'right') return false;
         var i = STEPS.indexOf(Playback.fade()); if (i < 0) i = 2;

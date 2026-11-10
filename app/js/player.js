@@ -74,54 +74,115 @@ var Playback = (function () {
   }
 
   // ---------------- Audius engine ----------------
-  var audio = new Audio(), queue = [], idx = -1, errors = 0;
-  audio.preload = 'auto';
+  // Two <audio> elements so the end of one song and the start of the next can really overlap (crossfade).
+  // Audius audio is plain MP3 with CORS, so it can also run through Web Audio for the 8D effect.
+  var els = [new Audio(), new Audio()], ai = 0, queue = [], idx = -1, errors = 0, xf = null;
+  function au() { return els[ai]; }
+  els.forEach(function (a, n) {
+    a.preload = 'auto'; a.crossOrigin = 'anonymous';
+    function mine() { return n === ai; }
+    a.addEventListener('playing', function () { if (!mine()) return; errors = 0; state.paused = false; state.buffering = false; emit('state', state); });
+    a.addEventListener('waiting', function () { if (!mine()) return; state.buffering = true; emit('state', state); });
+    a.addEventListener('pause', function () { if (!mine() || xf) return; state.paused = true; emit('state', state); });
+    a.addEventListener('ended', function () { if (mine()) auStep(1, true); });
+    a.addEventListener('error', function () {
+      if (!mine() || !a.getAttribute('src')) return;
+      errors++; state.buffering = false;
+      emit('error', { track: state.track, message: 'Could not play this track' });
+      if (errors < 3 && queue.length > 1) auStep(1, true); else { state.paused = true; emit('state', state); }
+    });
+  });
+  function stopEl(a) { a.pause(); a.removeAttribute('src'); a.load(); }
+  function endCrossfade() { if (xf) { stopEl(xf.old); xf = null; } }
   function auLoad() {
-    var t = queue[idx];
+    endCrossfade();
+    var t = queue[idx], a = au();
     state.engine = 'audius';
     setTrack(t || null);
-    if (!t) { audio.removeAttribute('src'); audio.load(); state.paused = true; emit('state', state); return; }
+    if (!t) { stopEl(a); state.paused = true; emit('state', state); return; }
     state.buffering = true;
-    audio.src = Sources.url(t.src);
-    var p = audio.play(); if (p && p.catch) p.catch(function () {});
+    a.volume = baseVol; applied = baseVol;
+    a.src = Sources.url(t.src);
+    var p = a.play(); if (p && p.catch) p.catch(function () {});
+  }
+  // Which song comes next (respecting shuffle and repeat), or -1 at the end of the queue.
+  function nextIndex(dir, auto) {
+    if (!queue.length) return -1;
+    if (state.shuffle && queue.length > 1) { var n; do { n = Math.floor(Math.random() * queue.length); } while (n === idx); return n; }
+    var i = idx + dir;
+    if (i >= queue.length) return state.repeat === 'all' || !auto ? 0 : -1;
+    return i < 0 ? queue.length - 1 : i;
   }
   function auStep(dir, auto) {
     if (!queue.length) return;
-    if (auto && state.repeat === 'track') { audio.currentTime = 0; audio.play(); return; }
-    if (state.shuffle && queue.length > 1) { var n; do { n = Math.floor(Math.random() * queue.length); } while (n === idx); idx = n; }
-    else {
-      idx += dir;
-      if (idx >= queue.length) { if (state.repeat === 'all' || !auto) idx = 0; else { idx = queue.length - 1; audio.pause(); return; } }
-      if (idx < 0) idx = queue.length - 1;
-    }
-    auLoad(); emit('queue');
+    if (auto && state.repeat === 'track') { au().currentTime = 0; au().play(); return; }
+    var i = nextIndex(dir, auto);
+    if (i < 0) { au().pause(); return; }
+    idx = i; auLoad(); emit('queue');
   }
-  audio.addEventListener('playing', function () { errors = 0; state.paused = false; state.buffering = false; emit('state', state); });
-  audio.addEventListener('waiting', function () { state.buffering = true; emit('state', state); });
-  audio.addEventListener('pause', function () { state.paused = true; emit('state', state); });
-  audio.addEventListener('ended', function () { auStep(1, true); });
-  audio.addEventListener('error', function () {
-    if (!audio.getAttribute('src')) return;
-    errors++; state.buffering = false;
-    emit('error', { track: state.track, message: 'Could not play this track' });
-    if (errors < 3 && queue.length > 1) auStep(1, true); else { state.paused = true; emit('state', state); }
-  });
+  // Starts the next song on the second element while the current one is still playing out.
+  function crossfadeTo(i, ms) {
+    var old = au(); ai ^= 1; idx = i;
+    var a = au(), t = queue[i];
+    xf = { old: old, at: Date.now(), ms: ms };
+    setTrack(t); emit('queue');
+    a.volume = 0; a.src = Sources.url(t.src);
+    var p = a.play(); if (p && p.catch) p.catch(function () {});
+    route(a);
+  }
+
+  // 8D: each element goes through a stereo panner swept left-right by a slow oscillator (Web Audio does the
+  // movement, no JavaScript runs per frame). Off by default; only for free songs, Spotify audio is locked.
+  var ac = null, sweep = null, routed = [false, false];
+  function eightD() { return Store.get('eightD', false); }
+  function route(a) {
+    if (!eightD() || !(window.AudioContext || window.webkitAudioContext)) return;
+    try {
+      if (!ac) {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        var osc = ac.createOscillator(); osc.frequency.value = 1 / 8;
+        sweep = ac.createGain(); sweep.gain.value = 0.85;
+        osc.connect(sweep); osc.start();
+      }
+      var n = els.indexOf(a);
+      if (routed[n]) return;
+      var src = ac.createMediaElementSource(a), pan = ac.createStereoPanner();
+      sweep.connect(pan.pan); src.connect(pan); pan.connect(ac.destination);
+      routed[n] = true;
+    } catch (e) { Log.add('8D unavailable', e.message); }
+  }
+  function setEightD(on) {
+    Store.set('eightD', !!on);
+    if (on) { route(els[0]); route(els[1]); }
+    if (sweep) sweep.gain.value = on ? 0.85 : 0;
+  }
 
   function isSp() { return state.engine === 'spotify'; }
 
-  // Smooth transitions: the end of a song fades out and the next fades in. A real overlap (like Spotify's
-  // Automix) needs two streams at once, which the Web Playback SDK can't do, so this fades one stream.
+  // Smooth transitions. Free songs truly overlap (crossfade on two elements). Spotify's player for other apps
+  // plays one stream at a time, so Spotify songs fade out and the next fades in.
   var baseVol = 0.8, applied = -1, fadeMs = null, trackAt = 0, fadedOut = false;
   function fadeLength() { if (fadeMs === null) fadeMs = Store.get('fadeMs', 6000); return fadeMs; }
   function applyVolume(v) {
     if (Math.abs(v - applied) < 0.02) return;
     applied = v;
-    if (isSp()) { if (sp.player) sp.player.setVolume(Math.max(0.0001, v)); } else audio.volume = v;
+    if (isSp()) { if (sp.player) sp.player.setVolume(Math.max(0.0001, v)); } else au().volume = v;
   }
   on('track', function () { trackAt = Date.now(); });
   setInterval(function () {
     if (!state.track || state.paused) return;
     var f = fadeLength(), d = duration(), left = d - position(), since = Date.now() - trackAt, v = baseVol;
+    if (!isSp()) {
+      if (xf) {
+        var k = Math.min(1, (Date.now() - xf.at) / xf.ms);
+        xf.old.volume = baseVol * (1 - k); au().volume = baseVol * k; applied = au().volume;
+        if (k >= 1) endCrossfade();
+        return;
+      }
+      if (f && d > f * 3 && left < f && left > 300 && state.repeat !== 'track') { var i = nextIndex(1, true); if (i >= 0) crossfadeTo(i, Math.max(1000, left)); return; }
+      applyVolume(baseVol);
+      return;
+    }
     if (f && d > f * 3) {
       if (left < f && left > 0) { v = baseVol * Math.max(0.05, left / f); fadedOut = true; }
       else if (fadedOut && since < f) v = baseVol * Math.min(1, 0.05 + since / f);
@@ -137,7 +198,7 @@ var Playback = (function () {
     var list = tracks.filter(function (t) { return t && t.src; }), first = tracks[start || 0] || list[0];
     if (!first) return;
     if (first.src.source === 'spotify') {
-      if (state.engine === 'audius') audio.pause();
+      if (state.engine === 'audius') { endCrossfade(); au().pause(); }
       state.engine = 'spotify';
       var body;
       if (ctx && ctx.uri && /^spotify:(album|playlist|artist):/.test(ctx.uri)) body = start == null ? { context_uri: ctx.uri } : { context_uri: ctx.uri, offset: { uri: first.uri } };
@@ -148,34 +209,37 @@ var Playback = (function () {
       return spPlay(body);
     }
     if (state.engine === 'spotify' && sp.player) sp.player.pause();
+    endCrossfade();
     queue = list; idx = Math.max(0, queue.indexOf(first)); errors = 0;
+    route(au());
     if (state.shuffle && start == null) idx = Math.floor(Math.random() * queue.length);
     auLoad(); emit('queue');
   }
   function playContext(ctx) { context = ctx; state.engine = 'spotify'; return spPlay({ context_uri: ctx.uri }); }
-  function position() { return isSp() ? (state.paused ? sp.pos : Math.min(sp.dur, sp.pos + Date.now() - sp.at)) : audio.currentTime * 1000; }
-  function duration() { if (isSp()) return sp.dur; return isFinite(audio.duration) && audio.duration > 0 ? audio.duration * 1000 : (state.track ? state.track.duration : 0); }
+  function position() { return isSp() ? (state.paused ? sp.pos : Math.min(sp.dur, sp.pos + Date.now() - sp.at)) : au().currentTime * 1000; }
+  function duration() { if (isSp()) return sp.dur; return isFinite(au().duration) && au().duration > 0 ? au().duration * 1000 : (state.track ? state.track.duration : 0); }
   function seek(ms) {
     if (!state.track) return;
     var d = duration(); ms = Math.max(0, Math.min(d ? d - 500 : ms, ms));
     if (isSp()) { sp.pos = ms; sp.at = Date.now(); if (sp.player) sp.player.seek(Math.round(ms)); }
-    else audio.currentTime = ms / 1000;
+    else { endCrossfade(); au().currentTime = ms / 1000; }
     emit('seek', ms);
   }
 
   return {
     on: on, play: play, playContext: playContext, state: state, seek: seek, duration: duration, position: position,
     initSpotify: spInit, spotify: function () { return { status: sp.status, error: sp.error, device: sp.device }; },
-    toggle: function () { if (!state.track) return; if (isSp()) sp.player && sp.player.togglePlay(); else if (audio.paused) audio.play(); else audio.pause(); },
-    resume: function () { if (!state.track) return; if (isSp()) sp.player && sp.player.resume(); else audio.play(); },
-    pause: function () { if (isSp()) sp.player && sp.player.pause(); else audio.pause(); },
+    toggle: function () { if (!state.track) return; if (isSp()) sp.player && sp.player.togglePlay(); else if (au().paused) au().play(); else { endCrossfade(); au().pause(); } },
+    resume: function () { if (!state.track) return; if (isSp()) sp.player && sp.player.resume(); else au().play(); },
+    pause: function () { if (isSp()) sp.player && sp.player.pause(); else { endCrossfade(); au().pause(); } },
     next: function () { if (isSp()) sp.player && sp.player.nextTrack(); else auStep(1, false); },
-    prev: function () { if (isSp()) { if (position() > 4000) seek(0); else sp.player && sp.player.previousTrack(); } else if (audio.currentTime > 4) seek(0); else auStep(-1, false); },
+    prev: function () { if (isSp()) { if (position() > 4000) seek(0); else sp.player && sp.player.previousTrack(); } else if (au().currentTime > 4) seek(0); else auStep(-1, false); },
     skipBy: function (ms) { seek(position() + ms); },
     volume: function (v) {
       if (v != null) { baseVol = Math.max(0, Math.min(1, v)); applied = -1; applyVolume(baseVol); emit('volume', baseVol); }
       return baseVol;
     },
+    eightD: function (on) { if (on != null) setEightD(on); return eightD(); },
     fade: function (ms) { if (ms != null) { fadeMs = ms; Store.set('fadeMs', ms); } return fadeLength(); },
     setShuffle: function (v) {
       state.shuffle = !!v; emit('state', state);

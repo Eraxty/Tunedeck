@@ -329,13 +329,19 @@ var UI = (function () {
     syncNpv();
   }
 
-  // Backdrop: the smallest cover scaled up is naturally blurred, so no CSS filter is needed on this GPU.
-  var bgFlip = 0;
+  // Blurred backdrops: the cover is drawn into a tiny canvas that CSS stretches over the screen. The GPU's
+  // smoothing does the blur, and the layer costs a few KB instead of a full-screen texture.
+  function paintBlur(canvas, img) {
+    var c = canvas.getContext('2d'), w = canvas.width, hgt = canvas.height, s = Math.max(w / img.width, hgt / img.height);
+    c.clearRect(0, 0, w, hgt);
+    c.drawImage(img, (w - img.width * s) / 2, (hgt - img.height * s) / 2, img.width * s, img.height * s);
+  }
+  var bgFlip = 0, bgImg = null;
   function setBackground(t) {
     var layers = $$('#bg .bgimg'), next = layers[bgFlip ^ 1], prev = layers[bgFlip], url = t && (t.cover_small || t.album_cover_url);
-    if (!url) { prev.style.opacity = 0; next.style.opacity = 0; return; }
+    if (!url) { prev.style.opacity = 0; next.style.opacity = 0; bgImg = null; return; }
     var img = new Image();
-    img.onload = function () { next.style.backgroundImage = 'url("' + url + '")'; next.style.opacity = 1; prev.style.opacity = 0; bgFlip ^= 1; };
+    img.onload = function () { bgImg = img; paintBlur(next, img); next.style.opacity = 1; prev.style.opacity = 0; bgFlip ^= 1; if (els.player) paintBlur($('.pl-bg', els.player), img); };
     img.src = url;
     tintFrom(url, document.documentElement, '--accent-art');
   }
@@ -450,11 +456,12 @@ var UI = (function () {
     if (!Playback.state.track) return toast('Play something first');
     if (mode === 'lyrics') { var p = prefs(); if (!p.lyrics) { p.lyrics = true; Store.set('player', p); } }
     if (els.player) { applyPlayerMode(); return; }
-    var L = layer('full player', '<div class="pl-bg"></div><div class="pl-shade"></div>' +
+    var L = layer('full player', '<canvas class="pl-bg" width="96" height="54"></canvas><div class="pl-shade"></div>' +
       '<div class="pl-top"><button class="pill f pl-back">' + Icon('back', 28) + '<span>Back</span></button><div class="pl-from"></div><div class="pl-now"><span class="pn-c"></span><span><b class="pn-t"></b><span class="pn-a"></span></span></div>' +
       '<div class="pl-toggles"><button class="tog f t-cover">' + Icon('image', 26) + '<span>Cover</span></button><button class="tog f t-lyrics">' + Icon('lyrics', 26) + '<span>Lyrics</span></button>' +
       '<button class="tog f t-info">' + Icon('text', 26) + '<span>Info</span></button>' +
       '<button class="tog f t-dark">' + Icon('moon', 26) + '<span>Dark</span></button>' +
+      '<button class="tog f t-8d">' + Icon('orbit', 26) + '<span>8D</span></button>' +
       '<span class="pl-sync"><button class="tog f t-early">Earlier</button><span class="pl-off">0.0s</span><button class="tog f t-late">Later</button></span></div></div>' +
       '<div class="pl-body"><div class="pl-left"><div class="pl-art"></div><div class="pl-meta"><div class="pl-title"></div><div class="pl-artist"></div></div></div>' +
       '<div class="pl-lyrics"><div class="pl-view"><div class="pl-lines"></div></div><div class="pl-empty"></div></div></div>' +
@@ -471,6 +478,10 @@ var UI = (function () {
     $('.t-lyrics', L.el).onclick = function () { toggle('lyrics'); };
     $('.t-dark', L.el).onclick = function () { toggle('dark'); };
     $('.t-info', L.el).onclick = function () { toggle('info'); };
+    $('.t-8d', L.el).onclick = function () {
+      if (Playback.state.engine === 'spotify') return toast('8D only works on free songs: Spotify keeps its audio locked to outside apps');
+      var on = !Playback.eightD(); Playback.eightD(on); applyPlayerMode(); toast(on ? '8D on' : '8D off');
+    };
     // Holding OK on these repeats (the remote sends repeated key presses), for big corrections.
     $('.t-early', L.el).onclick = function () { nudge(100); };
     $('.t-late', L.el).onclick = function () { nudge(-100); };
@@ -486,13 +497,15 @@ var UI = (function () {
     var p = prefs();
     P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics); P.classList.toggle('dark', p.dark); P.classList.toggle('no-info', !p.info);
     $('.t-info', P).classList.toggle('on', p.info);
+    $('.t-8d', P).classList.toggle('on', Playback.state.engine !== 'spotify' && Playback.eightD());
+    $('.t-8d', P).classList.toggle('na', Playback.state.engine === 'spotify');
     $('.t-cover', P).classList.toggle('on', p.cover); $('.t-lyrics', P).classList.toggle('on', p.lyrics); $('.t-dark', P).classList.toggle('on', p.dark);
     lyr.idx = -2;
   }
   function fillPlayer() {
     var P = els.player, t = Playback.state.track; if (!P || !t) return;
     setArt($('.pl-art', P), t.cover_big || t.album_cover_url);
-    $('.pl-bg', P).style.backgroundImage = 'url("' + (t.cover_small || t.album_cover_url) + '")';
+    if (bgImg) paintBlur($('.pl-bg', P), bgImg);
     $('.pl-title', P).textContent = t.name; $('.pl-artist', P).textContent = t.artist_names.join(', ');
     setArt($('.pn-c', P), t.cover_small || t.album_cover_url); $('.pn-t', P).textContent = t.name; $('.pn-a', P).textContent = t.artist_names.join(', ');
     var ctx = Playback.context();
@@ -534,7 +547,8 @@ var UI = (function () {
   }
 
   // ---------- clock ----------
-  // Live collections: no document queries per frame. The bar only moves when it changes by a visible amount.
+  // Runs 4 times a second (not every frame): the progress bar glides between updates with a CSS transition,
+  // which keeps the TV's processor free for audio. Live collections avoid document queries.
   var lastSec = -1, lastF = -1, fills = document.getElementsByClassName('sfill'), curs = document.getElementsByClassName('cur'), durs = document.getElementsByClassName('dur');
   function tick() {
     var t = Playback.state.track;
@@ -544,7 +558,6 @@ var UI = (function () {
       if (Math.abs(f - lastF) > 0.0007) { lastF = f; for (i = 0; i < fills.length; i++) fills[i].style.transform = 'scaleX(' + f + ')'; }
       lyricTick(p);
     }
-    requestAnimationFrame(tick);
   }
 
   function init() {
@@ -570,7 +583,7 @@ var UI = (function () {
     Focus.on('any', function (k) { if (k === 'red' || k === 'green') { nudge(k === 'red' ? 100 : -100); return true; } return false; });
     onState(Playback.state);
     setNpv(true);
-    requestAnimationFrame(tick);
+    setInterval(tick, 250);
   }
 
   return {
