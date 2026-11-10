@@ -32,7 +32,7 @@ var Playback = (function () {
       function fail(msg) { clearTimeout(timer); sp.status = 'error'; sp.error = msg; Log.add('sdk fail', msg); emit('engine', sp); sp.ready = null; reject(new Error(msg)); }
       window.onSpotifyWebPlaybackSDKReady = function () {
         Log.add('sdk script ready');
-        var p = new window.Spotify.Player({ name: CFG.deviceName, volume: 0.8, getOAuthToken: function (cb) { Spotify.token().then(cb, function (e) { Log.add('token fail', e.message); }); } });
+        var p = new window.Spotify.Player({ name: CFG.deviceName, volume: 0.8, getOAuthToken: function (cb) { SpotifyApi.token().then(cb, function (e) { Log.add('token fail', e.message); }); } });
         sp.player = p;
         p.addListener('ready', function (d) { clearTimeout(timer); sp.device = d.device_id; sp.status = 'ready'; Log.add('sdk ready', d.device_id); emit('engine', sp); resolve(d.device_id); });
         p.addListener('not_ready', function (d) { Log.add('sdk not_ready', d.device_id); sp.status = 'loading'; emit('engine', sp); });
@@ -64,7 +64,7 @@ var Playback = (function () {
   function spPlay(body) {
     return spInit().then(function () {
       if (sp.player.activateElement) sp.player.activateElement();
-      return Spotify.call('PUT', spDev('/me/player/play'), body);
+      return SpotifyApi.call('PUT', spDev('/me/player/play'), body);
     }).catch(function (e) {
       Log.add('play fail', e.message, e.code);
       // The device can drop off Spotify's list after the TV sleeps; reconnect once and retry.
@@ -157,15 +157,15 @@ var Playback = (function () {
     },
     setShuffle: function (v) {
       state.shuffle = !!v; emit('state', state);
-      if (isSp() && sp.device) Spotify.call('PUT', spDev('/me/player/shuffle?state=' + !!v)).catch(function (e) { Log.add('shuffle', e.message); });
+      if (isSp() && sp.device) SpotifyApi.call('PUT', spDev('/me/player/shuffle?state=' + !!v)).catch(function (e) { Log.add('shuffle', e.message); });
     },
     setRepeat: function (v) {
       state.repeat = v; emit('state', state);
-      if (isSp() && sp.device) Spotify.call('PUT', spDev('/me/player/repeat?state=' + ({ off: 'off', all: 'context', track: 'track' }[v]))).catch(function (e) { Log.add('repeat', e.message); });
+      if (isSp() && sp.device) SpotifyApi.call('PUT', spDev('/me/player/repeat?state=' + ({ off: 'off', all: 'context', track: 'track' }[v]))).catch(function (e) { Log.add('repeat', e.message); });
     },
     enqueue: function (t) {
       if (!t || !t.src) return;
-      if (t.src.source === 'spotify') { spInit().then(function () { return Spotify.call('POST', spDev('/me/player/queue?uri=' + encodeURIComponent(t.uri))); }).then(function () { emit('queue'); }, function (e) { emit('error', { message: e.message }); }); return; }
+      if (t.src.source === 'spotify') { spInit().then(function () { return SpotifyApi.call('POST', spDev('/me/player/queue?uri=' + encodeURIComponent(t.uri))); }).then(function () { emit('queue'); }, function (e) { emit('error', { message: e.message }); }); return; }
       queue.splice(idx + 1, 0, t); emit('queue'); if (idx < 0) { idx = 0; auLoad(); }
     },
     jump: function (i) {

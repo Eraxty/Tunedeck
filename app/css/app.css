@@ -304,7 +304,8 @@ h3{font-size:26px;font-weight:700}
 .signin{display:flex;align-items:center}
 .signin .qr{flex:none;margin-right:36px}
 .step{display:flex;align-items:flex-start;margin-bottom:16px;line-height:1.4}
-.step b{width:40px;height:40px;flex:none;border-radius:50%;background:var(--spice-button);color:#000;display:flex;align-items:center;justify-content:center;margin-right:14px}
+.step>b{width:40px;height:40px;flex:none;border-radius:50%;background:var(--spice-button);color:#000;display:flex;align-items:center;justify-content:center;margin-right:14px}
+.step span b{color:var(--spice-text)}
 .setup{margin-top:20px;line-height:1.45}
 
 /* ---------- full-screen player ---------- */

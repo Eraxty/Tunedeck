@@ -541,7 +541,7 @@ var UI = (function () {
     Playback.on('track', onTrack);
     Playback.on('state', onState);
     Playback.on('queue', function () { fillNext(); if (current === 'queue') refresh(); });
-    Playback.on('played', function (e) { if (e.context && e.context.id && !Spotify.linked()) Library.addRecent(e.context); });
+    Playback.on('played', function (e) { if (e.context && e.context.id && !SpotifyApi.linked()) Library.addRecent(e.context); });
     Playback.on('error', function (e) { toast(e.message + (e.track ? ': ' + e.track.name : '')); });
     Playback.on('engine', function (sp) { if (sp.status === 'error') toast(sp.error); });
     Library.onChange(function (what) { if (what === 'playlists' || what === 'saved' || what === 'following') buildLibrary(); });

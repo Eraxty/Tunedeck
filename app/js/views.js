@@ -1,7 +1,7 @@
 // Pages rendered into the main view. Each receives the scroll container's inner element and an argument.
 (function () {
   var h = UI.h, esc = UI.esc, $ = function (s, r) { return (r || document).querySelector(s); };
-  function sp() { return Spotify.linked(); }
+  function sp() { return SpotifyApi.linked(); }
   function greeting() { var hr = new Date().getHours(); return hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'; }
   function chips(parent, list, active, onPick) {
     var row = h('div', 'chips');

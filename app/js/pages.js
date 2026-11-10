@@ -7,11 +7,11 @@ var Account = (function () {
   // Sign in to Spotify from the TV: a QR code opens the login on the phone; the TV helper relays the result.
   function signIn(done) {
     var d = null;
-    Spotify.startLogin(function (err) {
+    SpotifyApi.startLogin(function (err) {
       if (d) d.close();
       if (err) { UI.toast(err.message); Log.add('login fail', err.message); return done && done(err); }
       Cat.clear();
-      Spotify.me().then(function (m) { Profiles.linkSpotify(m); UI.toast('Signed in as ' + m.name); if (done) done(null, m); },
+      SpotifyApi.me().then(function (m) { Profiles.linkSpotify(m); UI.toast('Signed in as ' + m.name); if (done) done(null, m); },
         function (e) { UI.toast(e.message); if (done) done(e); });
     }).then(function (info) {
       d = UI.dialog('Sign in with Spotify',
@@ -21,7 +21,7 @@ var Account = (function () {
         '<div class="step"><b>3</b><span>When your phone says the connection isn’t private, tap <i>Advanced</i>, then <i>Continue</i>: it’s this TV’s own certificate</span></div>' +
         '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> on any computer on the same Wi-Fi.</p>' +
         '<p class="dim small">Waiting for you to log in…</p></div></div>',
-        [{ label: 'Cancel', onClick: function () { Spotify.stopLogin(); if (done) done(new Error('cancelled')); } }]);
+        [{ label: 'Cancel', onClick: function () { SpotifyApi.stopLogin(); if (done) done(new Error('cancelled')); } }]);
     }, function (e) { UI.toast(e.message); if (done) done(e); });
   }
   return { signIn: signIn, helperInfo: helperInfo };
@@ -144,12 +144,12 @@ var Account = (function () {
     var prof = Profiles.current();
 
     section(root, 'Spotify', function (s) {
-      if (Spotify.linked()) {
-        var me = Spotify.cachedMe() || { name: 'your account' }, st = Playback.spotify();
+      if (SpotifyApi.linked()) {
+        var me = SpotifyApi.cachedMe() || { name: 'your account' }, st = Playback.spotify();
         row(s, 'user', 'Signed in as ' + me.name, 'Your playlists, Liked Songs and library sync live with Spotify', null);
-        row(s, 'link', 'Your Spotify key', 'Client ID ' + (Spotify.clientId() || '').slice(0, 6) + '…, saved on this TV for this profile', null);
+        row(s, 'link', 'Your Spotify key', 'Client ID ' + (SpotifyApi.clientId() || '').slice(0, 6) + '…, saved on this TV for this profile', null);
         row(s, 'music', 'Spotify player on this TV', st.status === 'ready' ? 'Ready · shows up as “' + CFG.deviceName + '” in Spotify Connect' : st.status === 'error' ? st.error : st.status === 'loading' ? 'Starting…' : 'Starts when you play something', function () { Playback.initSpotify().then(function () { UI.toast('Spotify player ready'); UI.refresh(); }, function (e) { UI.toast(e.message); }); });
-        row(s, 'close', 'Sign out of Spotify', 'This profile goes back to free Audius music', function () { Spotify.unlink(); Spotify.forgetKey(); Cat.clear(); Profiles.linkSpotify(null); UI.toast('Signed out'); location.reload(); });
+        row(s, 'close', 'Sign out of Spotify', 'This profile goes back to free Audius music', function () { SpotifyApi.unlink(); SpotifyApi.forgetKey(); Cat.clear(); Profiles.linkSpotify(null); UI.toast('Signed out'); location.reload(); });
       } else {
         row(s, 'link', 'Sign in with Spotify', 'Play your Spotify music, playlists and Liked Songs on this TV (Premium)', function () { Account.signIn(function (err) { if (!err) location.reload(); }); });
       }
@@ -163,7 +163,7 @@ var Account = (function () {
       });
     });
 
-    if (!Spotify.linked()) section(root, 'Import from your phone', function (s) {
+    if (!SpotifyApi.linked()) section(root, 'Import from your phone', function (s) {
       var box = h('div', 'qr-box', '<div class="qr-slot"><p class="dim">Starting…</p></div><div class="qr-text"><h3>Bring your playlists</h3>' +
         '<p class="dim">Scan with your phone and upload your Spotify “Download your data” zip or a Google Takeout (YouTube / YouTube Music) export.</p><p class="imp-status">Last import: ' + UI.ago(Library.importedAt()) + '</p></div>');
       s.appendChild(box);
@@ -180,7 +180,7 @@ var Account = (function () {
       }
       g._key = function (k) { if (k !== 'left' && k !== 'right') return false; Lyrics.setGlobal(Lyrics.globalOffset() + (k === 'left' ? -100 : 100)); paint(); return true; };
       paint();
-      if (!Spotify.linked()) row(s, 'music', 'Re-match imported songs', 'Look up playable versions again', function () { Library.clearMatches(); UI.toast('Matches cleared'); });
+      if (!SpotifyApi.linked()) row(s, 'music', 'Re-match imported songs', 'Look up playable versions again', function () { Library.clearMatches(); UI.toast('Matches cleared'); });
     });
 
     section(root, 'About', function (s) {
@@ -196,7 +196,7 @@ var Account = (function () {
 
   // Imports from the phone are picked up wherever you are in the app.
   setInterval(function () {
-    if (!Profiles.started() || Spotify.linked()) return;
+    if (!Profiles.started() || SpotifyApi.linked()) return;
     Library.checkHelper(function (r) {
       if (r.progress) return UI.toast(r.progress);
       if (r.error) return UI.toast('Import failed: ' + r.error);

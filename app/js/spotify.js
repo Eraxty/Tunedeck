@@ -1,7 +1,8 @@
 // Spotify account link, done entirely on the TV: Authorization Code + PKCE with no client secret.
 // The TV helper relays the redirect: the phone opens http://<tv>:8899/login (from a QR code), logs in, and
 // Spotify redirects to https://<tv>:8900/callback; the app polls the helper for the code and exchanges it.
-var Spotify = (function () {
+// Not named "Spotify": the Web Playback SDK claims window.Spotify when it loads.
+var SpotifyApi = (function () {
   var access = null, exp = 0, pendingRefresh = null, poll = null;
 
   function auth() { return Store.get('spotify', null); }

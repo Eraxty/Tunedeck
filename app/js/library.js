@@ -225,20 +225,20 @@ var Library = (function () {
     return song(t.name, (t.artists || []).map(function (a) { return a.name; }).join(', '), t.album && t.album.name, t.duration_ms, img && img.url);
   }
   function syncSpotify(progress) {
-    if (!Spotify.linked()) return Promise.reject(new Error('Spotify is not connected'));
+    if (!SpotifyApi.linked()) return Promise.reject(new Error('Spotify is not connected'));
     var out = [], skipped = 0;
     progress = progress || function () {};
     progress('Reading Liked Songs');
-    return Spotify.getAll('/me/tracks?limit=50').then(function (items) {
+    return SpotifyApi.getAll('/me/tracks?limit=50').then(function (items) {
       out.push({ id: 'sp:liked', origin: 'spotify', name: 'Spotify Liked Songs', cover: '',
         songs: items.map(function (i) { return i.track && fromSpotifyTrack(i.track); }).filter(Boolean) });
-      return Spotify.getAll('/me/playlists?limit=50', 1000);
+      return SpotifyApi.getAll('/me/playlists?limit=50', 1000);
     }).then(function (pls) {
       var chain = Promise.resolve();
       pls.forEach(function (p, n) {
         chain = chain.then(function () {
           progress('Reading playlist ' + (n + 1) + '/' + pls.length + ': ' + p.name);
-          return Spotify.getAll('/playlists/' + p.id + '/items?limit=50').then(function (items) {
+          return SpotifyApi.getAll('/playlists/' + p.id + '/items?limit=50').then(function (items) {
             out.push({ id: 'sp:' + p.id, origin: 'spotify', name: p.name, cover: p.images && p.images[0] ? p.images[0].url : '',
               songs: items.map(function (i) { var t = i.item || i.track; return t && !i.is_local && t.type !== 'episode' && fromSpotifyTrack(t); }).filter(Boolean) });
           }, function (e) {

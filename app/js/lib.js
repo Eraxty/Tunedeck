@@ -9,7 +9,7 @@ var Lib = (function () {
   function libraryItems(filter) {
     filter = filter || 'all';
     var want = function (k) { return filter === 'all' || filter === k; };
-    if (!Spotify.linked()) {
+    if (!SpotifyApi.linked()) {
       var out = want('playlists') ? [liked(Library.liked().length)].concat(Library.playlists().map(mineLocal)) : [];
       if (want('albums')) out = out.concat(Library.saved().map(function (x) { x.libSub = (x.kind === 'album' ? 'Album · ' : 'Playlist · ') + x.owner; return x; }));
       if (want('artists')) out = out.concat(Library.following().map(function (x) { x.libSub = 'Artist'; return x; }));
@@ -26,19 +26,19 @@ var Lib = (function () {
     });
   }
   function editablePlaylists() {
-    if (!Spotify.linked()) return Promise.resolve(Library.playlists().filter(function (p) { return p.origin === 'local'; }).map(function (p) { return { id: p.id, name: p.name, cover: p.cover, local: true }; }));
+    if (!SpotifyApi.linked()) return Promise.resolve(Library.playlists().filter(function (p) { return p.origin === 'local'; }).map(function (p) { return { id: p.id, name: p.name, cover: p.cover, local: true }; }));
     return Cat.playlists().then(function (l) { return l.filter(function (p) { return p.own; }); });
   }
   function createPlaylist(name, first) {
-    if (!Spotify.linked()) { var p = Library.createPlaylist(name); if (first) Library.addToPlaylist(p.id, first); return Promise.resolve(p); }
-    return Spotify.call('POST', '/me/playlists', { name: name, public: false, description: 'Made on TuneDeck' }).then(function (p) {
+    if (!SpotifyApi.linked()) { var p = Library.createPlaylist(name); if (first) Library.addToPlaylist(p.id, first); return Promise.resolve(p); }
+    return SpotifyApi.call('POST', '/me/playlists', { name: name, public: false, description: 'Made on TuneDeck' }).then(function (p) {
       Cat.clear(); return first ? addToPlaylist({ id: p.id }, first).then(function () { return p; }) : p;
     });
   }
   function addToPlaylist(p, t) {
-    if (!Spotify.linked() || p.local) { Library.addToPlaylist(p.id, t); return Promise.resolve(); }
+    if (!SpotifyApi.linked() || p.local) { Library.addToPlaylist(p.id, t); return Promise.resolve(); }
     if (t.src.source !== 'spotify') return Promise.reject(new Error('Only Spotify songs can go in a Spotify playlist'));
-    return Spotify.call('POST', '/playlists/' + p.id + '/items', { uris: [t.uri] });
+    return SpotifyApi.call('POST', '/playlists/' + p.id + '/items', { uris: [t.uri] });
   }
   return { libraryItems: libraryItems, editablePlaylists: editablePlaylists, createPlaylist: createPlaylist, addToPlaylist: addToPlaylist, liked: liked, mineLocal: mineLocal };
 })();
