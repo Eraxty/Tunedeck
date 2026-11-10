@@ -4,3 +4,4 @@ dist/
 node_modules/
 *.ipk
 engine/build.log
+app/js/auth.local.js

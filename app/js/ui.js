@@ -81,16 +81,15 @@ var UI = (function () {
       var res = h('div', 'list scroll'); view.appendChild(res);
       inp.onchange = function () {
         res.innerHTML = '<p class="dim">Searching…</p>';
-        Api.post('/token').then(function (t) {
-          return fetch('https://api.spotify.com/v1/search?type=track&limit=20&q=' + encodeURIComponent(inp.value), { headers: { Authorization: 'Bearer ' + t.token } });
-        }).then(function (r) { return r.json(); }).then(function (j) {
+        WebApi.search(inp.value).then(function (j) {
           res.innerHTML = '';
-          if (!j.tracks) return res.appendChild(h('p', 'dim', 'Search unavailable'));
-          j.tracks.items.forEach(function (t) {
+          var items = (j.tracks && j.tracks.items) || [];
+          if (!items.length) return res.appendChild(h('p', 'dim', 'No results'));
+          items.forEach(function (t) {
             var b = h('button', 'row f', '<span class="n">' + esc(t.name) + '</span><span class="d">' + esc(t.artists.map(function (a) { return a.name; }).join(', ')) + '</span>');
             b.onclick = function () { Api.play(t.uri); }; res.appendChild(b);
           });
-        }).catch(function () { res.innerHTML = '<p class="dim">Search failed</p>'; });
+        }).catch(function (e) { res.innerHTML = ''; res.appendChild(h('p', 'dim', esc(e.message))); });
       };
     },
     ext: function () {
