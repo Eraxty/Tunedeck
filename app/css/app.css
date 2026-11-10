@@ -289,7 +289,7 @@ h3{font-size:26px;font-weight:700}
 .seek .tpos,.seek .tdur{width:56px;flex:none;text-align:center}
 .seekbar{position:relative;flex:1;height:28px;display:flex;align-items:center;border-radius:14px;padding:0 6px}
 .sbar{display:block;width:100%;height:5px;border-radius:3px;background:rgba(var(--spice-rgb-text),.22);overflow:hidden;transition:height .15s}
-.sfill{display:block;width:100%;height:100%;background:var(--spice-text);transform-origin:0 50%;transform:scaleX(0);transition:transform .25s linear}
+.sfill{display:block;width:100%;height:100%;background:var(--spice-text);transform-origin:0 50%;transform:scaleX(0)}
 .seekbar.focus{transform:none}
 .seekbar.focus .sbar{height:10px;border-radius:5px}
 .seekbar.focus .sfill{background:var(--spice-button)}
@@ -350,7 +350,7 @@ h3{font-size:26px;font-weight:700}
 .pl-lyrics{flex:1;min-width:0;height:100%;margin-left:96px;position:relative}
 .pl-view{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;border-radius:12px}
 .pl-view.focus{box-shadow:inset 0 0 0 3px rgba(255,255,255,.4);transform:none}
-.pl-lines{transition:transform .5s var(--ease);will-change:transform}
+.pl-lines{transition:transform .5s var(--ease)}
 .ln{font-size:46px;font-weight:800;letter-spacing:-.8px;line-height:1.22;padding:10px 0;color:rgba(255,255,255,.32);transition:color .3s}
 .ln.past{color:rgba(255,255,255,.6)}
 .ln.on{color:#fff}
@@ -499,12 +499,7 @@ h3{font-size:26px;font-weight:700}
 .no-cover.no-lyrics .pl-left{width:100%;max-width:1500px;margin:0 auto;align-items:center;justify-content:center;text-align:center}
 .no-cover.no-lyrics .pl-meta{width:100%;text-align:center}
 .no-cover.no-lyrics .pl-title,.no-cover.no-lyrics .pl-artist{text-align:center}
-@keyframes drift{0%{transform:scale(1.02) translate3d(0,0,0)}50%{transform:scale(1.14) translate3d(-3%,2%,0)}100%{transform:scale(1.06) translate3d(2%,-2%,0)}}
-.pl-bg{animation:drift 36s ease-in-out infinite alternate;will-change:transform}
 .pl-art{transition:transform .6s var(--ease)}
 .player:not(.no-lyrics) .pl-art{transform:none}
 .all-songs{margin-top:20px}
-@media (prefers-reduced-motion:reduce){.pl-bg{animation:none}}
 
-/* the seek bar jumps (no glide) when you seek, so it doesn't lag behind the remote */
-.seekbar.focus .sfill{transition:none}

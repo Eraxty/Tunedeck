@@ -572,15 +572,21 @@ var UI = (function () {
   }
 
   // ---------- clock ----------
-  // Runs 4 times a second (not every frame): the progress bar glides between updates with a CSS transition,
-  // which keeps the TV's processor free for audio. Live collections avoid document queries.
+  // Checks 4 times a second (lyrics need that), but the screen only changes when something visible does: the
+  // time and progress bar once a second, with no animation. Anything that animates all the time makes this TV
+  // redraw the whole screen 60 times a second, which takes the processor from Spotify's player and the music
+  // stutters. Live collections avoid document queries.
   var lastSec = -1, lastF = -1, fills = document.getElementsByClassName('sfill'), curs = document.getElementsByClassName('tpos'), durs = document.getElementsByClassName('tdur');
   function tick() {
     var t = Playback.state.track;
     if (t) {
       var p = Playback.position(), d = Playback.duration(), f = d ? Math.min(1, p / d) : 0, sec = Math.floor(p / 1000), i;
-      if (sec !== lastSec) { lastSec = sec; for (i = 0; i < curs.length; i++) curs[i].textContent = fmt(p); for (i = 0; i < durs.length; i++) durs[i].textContent = fmt(d); }
-      if (Math.abs(f - lastF) > 0.0007) { lastF = f; for (i = 0; i < fills.length; i++) fills[i].style.transform = 'scaleX(' + f + ')'; }
+      if (sec !== lastSec || Math.abs(f - lastF) > 0.01) {
+        lastSec = sec; lastF = f;
+        for (i = 0; i < curs.length; i++) curs[i].textContent = fmt(p);
+        for (i = 0; i < durs.length; i++) durs[i].textContent = fmt(d);
+        for (i = 0; i < fills.length; i++) fills[i].style.transform = 'scaleX(' + f.toFixed(4) + ')';
+      }
       lyricTick(p);
     }
   }

@@ -120,34 +120,49 @@ var Cat = (function () {
               if (!mine || seen[key]) return false; seen[key] = 1; return true;
             }).map(function (t) { return track(t); }));
           }),
-          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function () { return []; }),
-          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function () { return []; })
+          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function (e) { Log.add('artist albums fail', e.code, e.message); return []; }),
+          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function (e) { Log.add('artist singles fail', e.code, e.message); return []; })
         ]).then(function (r) { return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] }; });
       });
     },
 
-    // Every song on an artist's albums and singles (newest first), without duplicate titles.
+    // Every song on an artist's albums and singles (newest first), without duplicate titles. Albums are read
+    // two at a time (Spotify rate-limits developer apps); an album that comes back without its song list gets
+    // it from the album's tracks endpoint. Failures are logged, and if nothing at all comes back the artist's
+    // popular songs are shown rather than an empty page.
     artistSongs: function (id, onProgress) {
       return this.artist(id).then(function (r) {
         var releases = r.albums.concat(r.singles).sort(function (a, b) { return b.year.localeCompare(a.year); }).slice(0, 40);
-        var out = [], seen = {}, i = 0;
+        var out = [], seen = {}, i = 0, fails = 0;
+        Log.add('artist songs', id, releases.length + ' releases');
+        function songs(al) {
+          return SpotifyApi.get('/albums/' + al.id).then(function (a) {
+            var items = a && a.tracks && a.tracks.items;
+            if (items && items.length) return { a: a, items: items };
+            return SpotifyApi.getAll('/albums/' + al.id + '/tracks?limit=10', 60).then(function (its) { return { a: a || al, items: its }; });
+          }).catch(function (e) { if (++fails <= 3) Log.add('album fail', al.id, e.code, e.message); return null; });
+        }
         function next() {
           if (i >= releases.length) return Promise.resolve();
-          var batch = releases.slice(i, i + 3); i += 3;
-          return Promise.all(batch.map(function (al) { return SpotifyApi.get('/albums/' + al.id).catch(function () { return null; }); })).then(function (albums) {
-            albums.forEach(function (a) {
-              if (!a) return;
-              (a.tracks.items || []).forEach(function (t) {
+          var batch = releases.slice(i, i + 2); i += 2;
+          return Promise.all(batch.map(songs)).then(function (res) {
+            res.forEach(function (x) {
+              if (!x) return;
+              x.items.forEach(function (t) {
+                if (!t || !t.name) return;
                 var key = t.name.toLowerCase().replace(/\s*[-(].*(remaster|version|edit|mix).*$/i, '');
-                if (seen[key] || !t.artists.some(function (x) { return x.id === id; })) return;
-                seen[key] = 1; var tr = track(t, a); if (tr) out.push(tr);
+                if (seen[key] || (t.artists && !t.artists.some(function (y) { return y.id === id; }))) return;
+                seen[key] = 1; var tr = track(t, x.a); if (tr) out.push(tr);
               });
             });
             if (onProgress) onProgress(out.length, Math.min(i, releases.length), releases.length);
             return next();
           });
         }
-        return next().then(function () { return { artist: r.artist, tracks: out }; });
+        return next().then(function () {
+          Log.add('artist songs done', out.length + ' songs', fails + ' failed albums');
+          return { artist: r.artist, tracks: out.length ? out : r.top };
+        });
       });
     },
 
