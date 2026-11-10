@@ -10,11 +10,13 @@ var Focus = (function () {
 
   function root() { return layers.length ? layers[layers.length - 1].el : document; }
 
-  // Position of el inside a scroller's .in, ignoring the current transform.
+  // Position of el inside a scroller's .in, measured on screen: both move with the .in's transform (and any
+  // slide still running), so the difference is the layout position. Summing offsetTop doesn't work here: the
+  // TV's Chrome 53 skips the transformed .in when walking offsetParents and counts the panel's own position
+  // too, which made lists scroll too late going up (focus slid under the header and then jumped away).
   function offsetIn(el, inner) {
-    var x = 0, y = 0, e = el;
-    while (e && e !== inner) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent; }
-    return { x: x, y: y, w: el.offsetWidth, h: el.offsetHeight };
+    var a = el.getBoundingClientRect(), b = inner.getBoundingClientRect();
+    return { x: a.left - b.left, y: a.top - b.top, w: el.offsetWidth, h: el.offsetHeight };
   }
 
   function scrollTo(p, off) {
