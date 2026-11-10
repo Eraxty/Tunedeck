@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="96" alt="TuneDeck logo">
+
 # TuneDeck
 
 A fast Spotify-style music player for LG webOS TVs (rooted with the Homebrew Channel), built because the

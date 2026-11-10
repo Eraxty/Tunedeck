@@ -41,7 +41,7 @@ var Profiles = (function () {
 
   // First launch: straight to signing in with Spotify.
   function welcome() {
-    var L = UI.layer('full profiles-screen', '<div class="prof-wrap welcome"><div class="logo-big">' + Icon('music', 52) + '<span>TuneDeck</span></div>' +
+    var L = UI.layer('full profiles-screen', '<div class="prof-wrap welcome"><div class="logo-big"><img src="assets/icon160.png" alt=""><span>TuneDeck</span></div>' +
       '<h1>Your Spotify, made for the TV</h1><p class="dim lead">Sign in with your Spotify Premium account to play your music, playlists and Liked Songs here.</p>' +
       '<div class="wbtns"><button class="pill primary big f default w-sp">Sign in with Spotify</button><button class="pill f w-free">Use free music instead</button></div></div>', {
       onBack: function () { if (!started) welcome(); }
@@ -53,7 +53,7 @@ var Profiles = (function () {
   function pick() {
     var list = all();
     if (!list.length && !started) return welcome();
-    var L = UI.layer('full profiles-screen', '<div class="prof-wrap"><div class="logo-big">' + Icon('music', 52) + '<span>TuneDeck</span></div><h1>Who’s listening?</h1><div class="prof-row"></div></div>', {
+    var L = UI.layer('full profiles-screen', '<div class="prof-wrap"><div class="logo-big"><img src="assets/icon160.png" alt=""><span>TuneDeck</span></div><h1>Who’s listening?</h1><div class="prof-row"></div></div>', {
       onBack: function () { if (!started) pick(); }
     });
     var row = L.el.querySelector('.prof-row');

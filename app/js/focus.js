@@ -156,16 +156,19 @@ var Focus = (function () {
   document.addEventListener('keydown', key);
 
   // Pointer (LG Magic Remote): hovering focuses, clicking activates, the wheel scrolls what is under it.
-  // Chrome repeats mouse events when content moves under a resting pointer; only real pointer movement
-  // counts (a new position, not just after a remote key), or lists would jump around while scrolling.
-  var px = -1, py = -1, moved = false, lastKey = 0;
-  document.addEventListener('keydown', function () { lastKey = Date.now(); moved = false; }, true);
+  // After a remote key, hovering takes over again only once the pointer really travels: the Magic Remote
+  // reports small movements while it is held still, and a list sliding under a resting pointer puts a new
+  // row under it. Either would pull focus to that row while you are moving with the arrow keys.
+  var shown = true, pointing = true, ax = 0, ay = 0, lastKey = 0;
+  document.addEventListener('cursorStateChange', function (e) { shown = !(e.detail && e.detail.visibility === false); if (!shown) pointing = false; });
+  document.addEventListener('keydown', function () { lastKey = Date.now(); pointing = false; ax = -1; }, true);
   document.addEventListener('mousemove', function (e) {
-    if (e.clientX === px && e.clientY === py) return;
-    px = e.clientX; py = e.clientY; moved = Date.now() - lastKey > 300;
-  });
-  document.addEventListener('mouseover', function (e) {
-    if (!moved) return;
+    if (!shown) return;
+    if (!pointing) {
+      if (ax < 0) { ax = e.clientX; ay = e.clientY; return; }
+      if (Math.abs(e.clientX - ax) + Math.abs(e.clientY - ay) < 40 || Date.now() - lastKey < 300) return;
+      pointing = true;
+    }
     var el = e.target.closest && e.target.closest('.f');
     if (el && el !== cur && root().contains(el) && usable(el)) set(el, true);
   });

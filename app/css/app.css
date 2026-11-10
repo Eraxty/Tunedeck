@@ -392,7 +392,8 @@ h3{font-size:26px;font-weight:700}
 .profiles-screen{background:var(--spice-main);display:flex;align-items:center;justify-content:center}
 .prof-wrap{text-align:center}
 .logo-big{display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:var(--spice-button);margin-bottom:40px}
-.logo-big span{margin-left:12px}
+.logo-big img{width:64px;height:64px;border-radius:14px}
+.logo-big span{margin-left:16px}
 .prof-wrap h1{margin-bottom:56px}
 .welcome{max-width:980px}
 .welcome h1{margin-bottom:20px}
