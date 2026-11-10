@@ -552,7 +552,10 @@ var UI = (function () {
     buildTop(); buildLibrary(); buildBar();
     Playback.on('track', onTrack);
     Playback.on('state', onState);
-    Playback.on('queue', function () { fillNext(); if (current === 'queue') refresh(); });
+    Playback.on('queue', fillNext);
+    // The Queue page re-reads Spotify's queue only when the song changes, not on every pause or seek.
+    var qT = null;
+    Playback.on('track', function () { if (current === 'queue') { clearTimeout(qT); qT = setTimeout(refresh, 900); } });
     Playback.on('played', function (e) { if (e.context && e.context.id && !SpotifyApi.linked()) Library.addRecent(e.context); });
     Playback.on('error', function (e) { toast(e.message + (e.track ? ': ' + e.track.name : '')); });
     Playback.on('engine', function (sp) { if (sp.status === 'error') toast(sp.error); });

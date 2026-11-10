@@ -195,6 +195,14 @@ var Playback = (function () {
       if (queue[i]) { idx = i; auLoad(); emit('queue'); }
     },
     queue: function () { return isSp() ? (state.track ? [state.track].concat(sp.next) : []) : queue.slice(); },
+    // The full upcoming queue. The SDK only knows the next couple of songs, so Spotify's Web API is asked.
+    fullQueue: function () {
+      if (!isSp()) return Promise.resolve(queue.slice());
+      return SpotifyApi.get('/me/player/queue').then(function (j) {
+        var cur = j && j.currently_playing ? Cat.track(j.currently_playing) : state.track;
+        return [cur].concat(((j && j.queue) || []).map(function (t) { return Cat.track(t); })).filter(Boolean);
+      }, function () { return state.track ? [state.track].concat(sp.next) : []; });
+    },
     index: function () { return isSp() ? 0 : idx; }, context: function () { return context; }
   };
 })();

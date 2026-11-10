@@ -263,14 +263,20 @@
   // ---------------- Queue ----------------
   UI.register('queue', function (root) {
     root.appendChild(h('h1', 'page-title', 'Queue'));
-    var q = Playback.queue(), cur = Playback.index();
-    if (!q.length) return empty(root, 'Your queue is empty', 'Play an album, playlist or song and it shows up here.', { label: 'Find something to play', onClick: function () { UI.go('search'); } });
-    root.appendChild(h('h2', 'sub-h', 'Now playing'));
-    UI.trackList(root, [q[cur]], { onPick: function () { Playback.toggle(); } });
-    var rest = q.slice(cur + 1);
-    if (rest.length) {
-      root.appendChild(h('h2', 'sub-h', 'Next up' + (Playback.context() && Playback.context().name ? ' from ' + esc(Playback.context().name) : '')));
-      UI.trackList(root, rest, { onPick: function (i) { Playback.jump(cur + 1 + i); setTimeout(UI.refresh, 600); } });
-    }
+    var body = h('div'); root.appendChild(body);
+    body.appendChild(h('p', 'dim pad', 'Loading your queue…'));
+    Playback.fullQueue().then(function (q) {
+      body.innerHTML = '';
+      var cur = Playback.state.engine === 'spotify' ? 0 : Playback.index();
+      if (!q.length || !q[cur]) return empty(body, 'Your queue is empty', 'Play an album, playlist or song and it shows up here.', { label: 'Find something to play', onClick: function () { UI.go('search'); } });
+      body.appendChild(h('h2', 'sub-h', 'Now playing'));
+      UI.trackList(body, [q[cur]], { onPick: function () { Playback.toggle(); } });
+      var rest = q.slice(cur + 1);
+      if (rest.length) {
+        body.appendChild(h('h2', 'sub-h', 'Next up' + (Playback.context() && Playback.context().name ? ' from ' + esc(Playback.context().name) : '') + ' · ' + rest.length + ' songs'));
+        UI.trackList(body, rest, { onPick: function (i) { Playback.jump(cur + 1 + i); UI.toast('Skipping to ' + rest[i].name); setTimeout(UI.refresh, 1500); } });
+      }
+      UI.lazy(body); Focus.first(root);
+    });
   });
 })();
