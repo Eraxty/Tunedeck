@@ -40,10 +40,10 @@ var Lyrics = (function () {
     return getJson(CFG.lrclib + '/get' + q).then(function (r) {
       if (r && r.syncedLyrics) return r;
       return getJson(CFG.lrclib + '/search?track_name=' + encodeURIComponent(clean(name)) + '&artist_name=' + encodeURIComponent(artist))
-        .then(function (list) { return pick(list, dur); });
+        .then(function (list) { return pick(list, dur) || (r && r.plainLyrics ? r : null); });
     }).then(function (r) {
-      var res = r ? { lines: parseLrc(r.syncedLyrics), plain: r.plainLyrics, synced: true } :
-        { lines: [], plain: null, synced: false };
+      var res = r && r.syncedLyrics ? { lines: parseLrc(r.syncedLyrics), plain: r.plainLyrics, synced: true } :
+        { lines: [], plain: r ? r.plainLyrics : null, synced: false };
       cache[key] = res; return res;
     });
   }

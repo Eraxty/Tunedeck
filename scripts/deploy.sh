@@ -1,20 +1,36 @@
 #!/usr/bin/env bash
-# Packages the app and installs it on the TV over root SSH. Only touches the homebrew app folder,
-# never the firmware. Does not launch the app.
+# Installs TuneDeck on the TV over root SSH: the app (ipk) and the helper (phone import + Spotify login relay).
+# Only touches the homebrew app folder, /media/developer/tunedeck and the Homebrew Channel init.d hook.
+# Never touches the firmware. Does not launch the app.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TV="${TV_HOST:-root@192.168.1.3}"
+TV_IP="${TV#*@}"
 ID=com.ice.tunedeck
+HELPER=/media/developer/tunedeck
 SSH=(ssh -o BatchMode=yes -o LogLevel=ERROR "$TV")
+SCP=(scp -q -o BatchMode=yes -o LogLevel=ERROR)
 
-[ -f app/js/auth.local.js ] || echo 'window.AUTH_SEED = null;' > app/js/auth.local.js
-[ -f app/js/import.local.js ] || echo 'window.IMPORT_DATA = null;' > app/js/import.local.js
+# Self-signed cert for the HTTPS Spotify callback (Spotify only redirects to HTTPS or loopback).
+mkdir -p helper/certs
+if [ ! -f helper/certs/cert.pem ]; then
+  openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 3650 -subj "/CN=TuneDeck TV" \
+    -addext "subjectAltName=IP:$TV_IP" -keyout helper/certs/key.pem -out helper/certs/cert.pem 2>/dev/null
+fi
+
+"${SSH[@]}" "mkdir -p $HELPER/data"
+"${SCP[@]}" helper/server.js helper/run.sh helper/phone.html helper/certs/key.pem helper/certs/cert.pem "$TV:$HELPER/"
+"${SCP[@]}" helper/init.sh "$TV:/var/lib/webosbrew/init.d/tunedeck"
+"${SSH[@]}" "chmod +x /var/lib/webosbrew/init.d/tunedeck
+  pkill -f '[t]unedeck/run.sh' ; pkill -f '[t]unedeck/server.js' ; true
+  sh /var/lib/webosbrew/init.d/tunedeck"
+echo "helper installed and started"
+
 mkdir -p dist && rm -f dist/*.ipk
 ares-package --no-minify app -o dist > /dev/null
 IPK=$(ls dist/*.ipk)
-
-scp -q -o BatchMode=yes -o LogLevel=ERROR "$IPK" "$TV:/media/developer/temp/tunedeck.ipk"
+"${SCP[@]}" "$IPK" "$TV:/media/developer/temp/tunedeck.ipk"
 "${SSH[@]}" "L=/tmp/tunedeck-install.log; : > \$L
   luna-send -i -f luna://com.webos.appInstallService/dev/install '{\"id\":\"$ID\",\"ipkUrl\":\"/media/developer/temp/tunedeck.ipk\",\"subscribe\":true}' > \$L 2>&1 < /dev/null &
   P=\$!; i=0

@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TuneDeck</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#121212;color:#fff;padding:24px 18px 48px;max-width:560px;margin:0 auto}
+h1{font-size:28px;margin:4px 0 4px}h2{font-size:20px;margin:32px 0 8px}
+p,li{color:#b3b3b3;line-height:1.5}
+.card{background:#1e1e1e;border-radius:14px;padding:18px;margin-top:12px}
+label.btn,a.btn{display:block;text-align:center;background:#1db954;color:#000;font-weight:700;border-radius:999px;padding:14px;text-decoration:none;margin-top:12px}
+input[type=file]{display:none}
+#status{margin-top:12px;font-weight:600;color:#fff}
+.err{color:#ff7a7a!important}
+</style></head>
+<body>
+<h1>TuneDeck</h1>
+<p>Send your music library to the TV.</p>
+
+<h2>Import a library export</h2>
+<div class="card">
+  <ol>
+    <li><b>Spotify:</b> spotify.com → Account → Privacy settings → <i>Download your data</i> (Account data). Spotify emails a zip in a few days.</li>
+    <li><b>YouTube / YouTube Music:</b> takeout.google.com → select only <i>YouTube and YouTube Music</i> → export.</li>
+  </ol>
+  <p>Upload the .zip as it arrives, or individual .json / .csv files. Re-upload a newer export any time to sync.</p>
+  <label class="btn">Choose export files<input id="file" type="file" multiple accept=".zip,.json,.csv"></label>
+  <div id="status"></div>
+</div>
+
+<h2>Connect Spotify (live sync)</h2>
+<div class="card">
+  <p>Start <b>Connect Spotify</b> in the TV's Settings first, then tap below. Your browser will warn that the TV's connection is not private; that's the TV's own certificate, choose to continue.</p>
+  <a class="btn" href="/login">Log in with Spotify</a>
+</div>
+
+<script>
+var st = document.getElementById('status');
+document.getElementById('file').onchange = async function (e) {
+  var files = Array.prototype.slice.call(e.target.files), total = 0;
+  for (var f of files) {
+    st.className = ''; st.textContent = 'Uploading ' + f.name + '…';
+    try {
+      var r = await fetch('/api/upload?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+      var j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.status);
+      total += j.files;
+    } catch (err) { st.className = 'err'; st.textContent = f.name + ': ' + err.message; return; }
+  }
+  st.textContent = 'Sent ' + total + ' library file(s). The TV is importing them now.';
+};
+</script>
+</body></html>

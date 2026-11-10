@@ -6,3 +6,4 @@ node_modules/
 engine/build.log
 app/js/auth.local.js
 app/js/import.local.js
+helper/certs/
