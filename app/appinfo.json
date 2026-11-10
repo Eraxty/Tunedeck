@@ -1,0 +1,14 @@
+{
+  "id": "com.ice.tunedeck",
+  "version": "0.1.0",
+  "vendor": "ice",
+  "type": "web",
+  "main": "index.html",
+  "title": "TuneDeck",
+  "icon": "assets/icon.png",
+  "largeIcon": "assets/largeIcon.png",
+  "bgColor": "#121212",
+  "resolution": "1920x1080",
+  "disallowScrollingInMainWindow": true,
+  "requiredPermissions": ["time.query", "activity.operation"]
+}

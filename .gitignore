@@ -1,0 +1,6 @@
+engine/src/
+engine/out/
+dist/
+node_modules/
+*.ipk
+engine/build.log

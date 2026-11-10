@@ -1,0 +1,20 @@
+device_name: "TuneDeck TV"
+device_type: tv
+audio_backend: pulseaudio
+audio_backend_runtime_socket: /var/run/pulse/native
+bitrate: 320
+initial_volume: 60
+volume_steps: 100
+zeroconf_enabled: true
+credentials:
+  type: zeroconf
+  zeroconf:
+    persist_credentials: true
+server:
+  enabled: true
+  address: 127.0.0.1
+  port: 3678
+  allow_origin: "*"
+metadata:
+  enabled: true
+  context_sweep: true
