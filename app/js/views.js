@@ -234,30 +234,14 @@
         var sec = h('section', 'shelf', '<div class="shelf-head"><h2>Popular</h2></div>'); root.appendChild(sec);
         UI.trackList(sec, top.slice(0, 10), { onPick: function (i) { Playback.play(top, i, { name: a.name }); } });
       }
-      if (SpotifyApi.linked()) {
-        var all = h('button', 'pill f all-songs', Icon('music', 26) + '<span>See all songs by ' + esc(a.name) + '</span>');
-        all.onclick = function () { UI.go('artistSongs', id); };
-        root.appendChild(all);
-      }
-      if (r.albums.length) UI.shelf(root, 'Albums', r.albums);
-      if (r.singles.length) UI.shelf(root, 'Singles and EPs', r.singles);
+      // Every album and single, newest first, like Spotify's discography.
+      var newest = function (l) { return l.slice().sort(function (x, y) { return y.year.localeCompare(x.year); }); };
+      if (r.albums.length) UI.shelf(root, 'Albums', newest(r.albums), { over: r.albums.length + ' albums' });
+      if (r.singles.length) UI.shelf(root, 'Singles and EPs', newest(r.singles), { over: r.singles.length + ' releases' });
+      if (SpotifyApi.linked() && !r.albums.length && !r.singles.length) empty(root, 'Releases didn’t load', 'Spotify is limiting requests right now. Open this artist again in a minute.');
       if (r.playlists.length) UI.shelf(root, 'Playlists', r.playlists);
       UI.lazy(root); Focus.first(root);
     }, function (e) { root.innerHTML = ''; empty(root, 'Couldn’t open this artist', e.message, { label: 'Go back', onClick: UI.back }); Focus.first(root); });
-  });
-
-  // ---------------- All songs by an artist ----------------
-  UI.register('artistSongs', function (root, id) {
-    root.appendChild(h('h1', 'page-title', 'All songs'));
-    var st = h('p', 'dim lead', 'Collecting songs from every album and single…'); root.appendChild(st);
-    Cat.artistSongs(id, function (n, done, total) { st.textContent = 'Collecting songs… ' + n + ' so far (' + done + ' of ' + total + ' releases)'; }).then(function (r) {
-      $('.page-title', root).textContent = 'All songs by ' + r.artist.name;
-      st.textContent = r.tracks.length + ' songs, newest first';
-      var ctx = { name: r.artist.name, kind: 'artist', id: r.artist.id };
-      if (!r.tracks.length) return empty(root, 'No songs found', 'Spotify returned no releases for this artist.');
-      UI.trackList(root, r.tracks, { onPick: function (i) { Playback.play(r.tracks, i, ctx); } });
-      UI.lazy(root); Focus.first(root);
-    }, function (e) { st.textContent = e.message; });
   });
 
   // ---------------- Queue ----------------

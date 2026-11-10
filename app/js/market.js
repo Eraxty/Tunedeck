@@ -1,7 +1,8 @@
 // Marketplace: browses the Spicetify community catalogue (GitHub repos tagged spicetify-extensions /
 // spicetify-themes, each with a manifest.json, same source the Spicetify Marketplace uses) and installs
 // into the active profile. Themes apply their color.ini scheme through the --spice-* variables the whole
-// app is styled with; a theme's user.css targets the desktop client, so it is optional.
+// app is styled with. A theme's user.css restyles Spotify desktop's own screen layout, which TuneDeck doesn't
+// have: it can't match anything here and its effects only slow the TV, so it is never downloaded.
 // Extensions run against a Spicetify-compatible API subset. Most are written for newer browsers than this TV's
 // Chrome 53, so they are converted on the TV with Babel (loaded only while installing) and stored converted.
 var Ext = (function () {
@@ -10,7 +11,7 @@ var Ext = (function () {
   var VARS = ['text', 'subtext', 'main', 'main-elevated', 'highlight', 'highlight-elevated', 'sidebar', 'player', 'card', 'shadow',
     'selected-row', 'button', 'button-active', 'button-disabled', 'tab-active', 'notification', 'notification-error', 'misc'];
 
-  function db() { return Store.get('ext', { themes: [], extensions: [], activeTheme: null, scheme: null, themeCss: false }); }
+  function db() { return Store.get('ext', { themes: [], extensions: [], activeTheme: null, scheme: null }); }
 
   // One-press palettes (no download), written in color.ini terms so they go through the same path as themes.
   var FEATURED = [
@@ -102,7 +103,7 @@ var Ext = (function () {
     if (!t) { el.textContent = ''; return; }
     var schemes = parseIni(t.ini || ''), name = d.scheme && schemes[d.scheme] ? d.scheme : Object.keys(schemes)[0], vars = schemes[name] || {};
     var css = ':root{' + Object.keys(vars).map(function (k) { return k + ':#' + vars[k] + ';' + k.replace('--spice-', '--spice-rgb-') + ':' + hexRgb(vars[k]); }).join(';') + '}';
-    el.textContent = css + (d.themeCss ? t.css : '');
+    el.textContent = css;
   }
   // Downloads a theme's color.ini and returns its schemes ({ name: { --spice-x: hex } }) for previews.
   function themeSchemes(m) {
@@ -110,13 +111,13 @@ var Ext = (function () {
     return text(abs(m.repo, m.branch, m.schemes)).then(function (ini) { m._ini = ini; return parseIni(ini); });
   }
   function installTheme(m, scheme) {
-    return Promise.all([m.usercss ? text(abs(m.repo, m.branch, m.usercss)).catch(function () { return ''; }) : Promise.resolve(''), m._ini ? Promise.resolve(m._ini) : m.schemes ? text(abs(m.repo, m.branch, m.schemes)) : Promise.resolve('')]).then(function (r) {
-      if (!r[1]) throw new Error('This theme has no colour schemes, so it can’t restyle TuneDeck');
+    return (m._ini ? Promise.resolve(m._ini) : m.schemes ? text(abs(m.repo, m.branch, m.schemes)) : Promise.resolve('')).then(function (ini) {
+      if (!ini) throw new Error('This theme only changes Spotify desktop’s layout, so it can’t restyle TuneDeck');
       var d = db(), id = m.repo + '#' + m.name;
       d.themes = d.themes.filter(function (x) { return x.id !== id; });
-      d.themes.push({ id: id, name: m.name, author: m.owner, preview: m.preview, css: r[0], ini: r[1] });
+      d.themes.push({ id: id, name: m.name, author: m.owner, preview: m.preview, ini: ini });
       d.activeTheme = id; d.scheme = scheme || null; save(d); applyTheme();
-      return Object.keys(parseIni(r[1]));
+      return Object.keys(parseIni(ini));
     });
   }
   // ---- extensions ----
@@ -271,6 +272,8 @@ var Ext = (function () {
   }
 
   function boot() {
+    var d = db();
+    if (d.themes.some(function (t) { return t.css; }) || 'themeCss' in d) { d.themes.forEach(function (t) { delete t.css; }); delete d.themeCss; save(d); }
     shim(); applyTheme();
     db().extensions.forEach(function (x) { if (x.on && x.compatible) run(x); });
   }
@@ -280,7 +283,6 @@ var Ext = (function () {
     themeSchemes: themeSchemes, installTheme: installTheme, checkExtension: checkExtension, installExtension: installExtension, remove: remove, installed: installed,
     schemes: function (t) { return Object.keys(parseIni(t.ini || '')); }, parseIni: parseIni,
     setTheme: function (id, scheme) { var d = db(); d.activeTheme = id; d.scheme = scheme || null; save(d); applyTheme(); },
-    setThemeCss: function (on) { var d = db(); d.themeCss = on; save(d); applyTheme(); },
     setExtension: function (id, on) { var d = db(); d.extensions.forEach(function (x) { if (x.id === id) x.on = on && x.compatible; }); save(d); },
     topbar: function () { return topbar; }, menus: function () { return menus; }
   };

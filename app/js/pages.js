@@ -101,9 +101,12 @@ var Account = (function () {
     Ext.items(tab).then(function (list) {
       grid.innerHTML = '';
       if (!list.length) return grid.appendChild(h('p', 'dim pad', 'Nothing found. GitHub may be limiting requests; try again in a minute.'));
+      // Themes work here through their colour schemes; ones without any only restyle Spotify desktop's layout.
+      if (tab === 'themes') list = list.filter(function (m) { return m.schemes; }).concat(list.filter(function (m) { return !m.schemes; }));
       list.slice(0, 60).forEach(function (m) {
-        var c = h('button', 'mcard f' + (Ext.installed(m) ? ' is-installed' : ''), '<div class="mprev"' + thumb(m.preview) + '></div><div class="mbody"><div class="t">' + esc(m.name) + '</div>' +
-          '<div class="s">' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</div><div class="md">' + esc((m.desc || '').slice(0, 96)) + '</div></div>');
+        var tag = tab !== 'themes' ? '' : m.schemes ? '<span class="mtag ok">Colours work here</span>' : '<span class="mtag no">Spotify desktop only</span>';
+        var c = h('button', 'mcard f' + (Ext.installed(m) ? ' is-installed' : '') + (tab === 'themes' && !m.schemes ? ' desktop-only' : ''), '<div class="mprev"' + thumb(m.preview) + '></div><div class="mbody"><div class="t">' + esc(m.name) + '</div>' +
+          '<div class="s">' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</div>' + tag + '<div class="md">' + esc((m.desc || '').slice(0, 96)) + '</div></div>');
         c.onclick = function () { (tab === 'themes' ? themeDetail : extDetail)(m); };
         grid.appendChild(c);
       });
@@ -113,14 +116,16 @@ var Account = (function () {
 
   function themeDetail(m) {
     var d = detail('<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + thumb(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
-      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p></div></div>' +
+      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p>' +
+      (m.schemes ? '<p class="compat dim"><span class="ok">Its colours work on TuneDeck.</span> Its layout and effects (shapes, corners, blur, animations) are written for Spotify desktop’s screen, so they aren’t used here: they can’t match TuneDeck and would only slow the TV down.</p>'
+        : '<p class="compat dim"><span class="bad">Not compatible.</span> This theme only changes Spotify desktop’s layout and has no colours TuneDeck can use.</p>') + '</div></div>' +
       '<h3 class="sch-h">Colour schemes</h3><div class="schemes"><p class="dim">Downloading…</p></div><div class="dbtns"><button class="pill f close-d">Close</button></div></div>');
     d.el.querySelector('.close-d').onclick = d.close;
     var box = d.el.querySelector('.schemes');
     Ext.themeSchemes(m).then(function (sch) {
       var names = Object.keys(sch);
       box.innerHTML = '';
-      if (!names.length) { box.innerHTML = '<p class="dim">This theme only has layout CSS for Spotify desktop and no colour schemes, so it can’t restyle TuneDeck.</p>'; return; }
+      if (!names.length) { box.innerHTML = '<p class="dim">No colour schemes to install.</p>'; return; }
       names.forEach(function (n, i) {
         var b = h('button', 'scheme f' + (i === 0 ? ' default' : ''), swatches(sch[n]) + '<span>' + esc(n) + '</span>');
         b.onclick = function () {
@@ -167,7 +172,6 @@ var Account = (function () {
       });
       row('Remove ' + t.name, 'Deletes the download', false, function () { Ext.remove('themes', t.id); UI.refresh(); }, 'trash');
     });
-    if (d.themes.length) row('Theme layout CSS', (d.themeCss ? 'On' : 'Off') + ' · written for Spotify desktop, can look odd here', d.themeCss, function () { Ext.setThemeCss(!d.themeCss); UI.refresh(); }, 'settings');
     list.appendChild(h('h2', 'pad-top', 'Extensions'));
     if (!d.extensions.length) list.appendChild(h('p', 'dim pad', 'No extensions installed.'));
     d.extensions.forEach(function (x) {

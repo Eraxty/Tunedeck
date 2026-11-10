@@ -432,6 +432,8 @@ h3{font-size:26px;font-weight:700}
 .scheme .sw{margin-right:20px}
 .scheme.focus{box-shadow:0 0 0 3px var(--spice-text)}
 .ok{color:var(--spice-button);font-weight:700}.bad{color:#ff6b6b;font-weight:700}.warn{color:#ffc864;font-weight:700}
+.mtag{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:10px;font-size:15px;font-weight:700}.mtag.ok{background:rgba(var(--spice-rgb-button),.18);color:var(--spice-button)}.mtag.no{background:rgba(255,107,107,.16);color:#ff8a8a}
+.mcard.desktop-only .mprev{opacity:.45}
 .mprev,.mbig{position:relative;overflow:hidden}.thumb{position:absolute;left:0;top:0;width:100%;height:100%}
 .mmodal #view{visibility:hidden}
 /* an active theme or palette shows through: firmer panels in its colours, its accent on the main controls */
@@ -501,5 +503,4 @@ h3{font-size:26px;font-weight:700}
 .no-cover.no-lyrics .pl-title,.no-cover.no-lyrics .pl-artist{text-align:center}
 .pl-art{transition:transform .6s var(--ease)}
 .player:not(.no-lyrics) .pl-art{transform:none}
-.all-songs{margin-top:20px}
 

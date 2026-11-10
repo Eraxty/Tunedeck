@@ -32,6 +32,13 @@ var Cat = (function () {
   }
   function artist(a) { return { kind: 'artist', id: a.id, uri: a.uri, name: a.name, avatar: imgs(a.images), avatar_big: imgs(a.images, true), followers: null, genres: a.genres || [] }; }
   function clean(list) { return list.filter(Boolean); }
+  // Name and cover of an album, artist or playlist known only by URI (from recently played).
+  function lookupContext(x) {
+    var path = x.kind === 'album' ? '/albums/' : x.kind === 'artist' ? '/artists/' : '/playlists/';
+    return SpotifyApi.get(path + x.id + (x.kind === 'playlist' ? '?fields=id,uri,name,images,owner,description,collaborative,items.total,tracks.total' : '')).then(function (d) {
+      return x.kind === 'album' ? album(d) : x.kind === 'artist' ? artist(d) : playlist(d);
+    }, function (e) { return x.kind === 'playlist' && e.code !== 429 ? mix(x.id, x.art) : null; });
+  }
   // Spotify-made playlists (Daily Mix, artist Mixes, Discover Weekly...) can't be read by apps like this one,
   // but they still play. Their name comes from Spotify's public embed info.
   function mix(id, cover) {
@@ -105,13 +112,15 @@ var Cat = (function () {
     artist: function (id) {
       if (!isSp()) return Promise.all([Sources.artist(id), Sources.artistTracks(id, 10), Sources.artistAlbums(id), Sources.artistPlaylists(id)])
         .then(function (r) { return { artist: r[0], top: r[1], albums: r[2], singles: [], playlists: r[3] }; });
-      return SpotifyApi.get('/artists/' + id).then(function (a) {
+      // Cached for an hour: an artist page costs 5 requests, and Spotify rate-limits developer apps.
+      var bad = false, key = 'artistPage:' + id;
+      return memo(key, 3600000, function () { return SpotifyApi.get('/artists/' + id).then(function (a) {
         var ar = artist(a);
         // Artist top tracks are gone for dev-mode apps; search scoped to the artist (most popular first) is the
-        // closest substitute. Search pages hold 10 results, so three pages are read and matched by artist id.
+        // closest substitute. Search pages hold 10 results, so two pages are read and matched by artist id.
         var q = encodeURIComponent('artist:"' + a.name + '"');
         return Promise.all([
-          Promise.all([0, 10, 20].map(function (off) {
+          Promise.all([0, 10].map(function (off) {
             return SpotifyApi.get('/search?type=track&limit=10&offset=' + off + '&q=' + q).then(function (s) { return s.tracks.items; }, function () { return []; });
           })).then(function (pages) {
             var seen = {};
@@ -120,50 +129,13 @@ var Cat = (function () {
               if (!mine || seen[key]) return false; seen[key] = 1; return true;
             }).map(function (t) { return track(t); }));
           }),
-          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function (e) { Log.add('artist albums fail', e.code, e.message); return []; }),
-          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function (e) { Log.add('artist singles fail', e.code, e.message); return []; })
-        ]).then(function (r) { return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] }; });
-      });
-    },
-
-    // Every song on an artist's albums and singles (newest first), without duplicate titles. Albums are read
-    // two at a time (Spotify rate-limits developer apps); an album that comes back without its song list gets
-    // it from the album's tracks endpoint. Failures are logged, and if nothing at all comes back the artist's
-    // popular songs are shown rather than an empty page.
-    artistSongs: function (id, onProgress) {
-      return this.artist(id).then(function (r) {
-        var releases = r.albums.concat(r.singles).sort(function (a, b) { return b.year.localeCompare(a.year); }).slice(0, 40);
-        var out = [], seen = {}, i = 0, fails = 0;
-        Log.add('artist songs', id, releases.length + ' releases');
-        function songs(al) {
-          return SpotifyApi.get('/albums/' + al.id).then(function (a) {
-            var items = a && a.tracks && a.tracks.items;
-            if (items && items.length) return { a: a, items: items };
-            return SpotifyApi.getAll('/albums/' + al.id + '/tracks?limit=10', 60).then(function (its) { return { a: a || al, items: its }; });
-          }).catch(function (e) { if (++fails <= 3) Log.add('album fail', al.id, e.code, e.message); return null; });
-        }
-        function next() {
-          if (i >= releases.length) return Promise.resolve();
-          var batch = releases.slice(i, i + 2); i += 2;
-          return Promise.all(batch.map(songs)).then(function (res) {
-            res.forEach(function (x) {
-              if (!x) return;
-              x.items.forEach(function (t) {
-                if (!t || !t.name) return;
-                var key = t.name.toLowerCase().replace(/\s*[-(].*(remaster|version|edit|mix).*$/i, '');
-                if (seen[key] || (t.artists && !t.artists.some(function (y) { return y.id === id; }))) return;
-                seen[key] = 1; var tr = track(t, x.a); if (tr) out.push(tr);
-              });
-            });
-            if (onProgress) onProgress(out.length, Math.min(i, releases.length), releases.length);
-            return next();
-          });
-        }
-        return next().then(function () {
-          Log.add('artist songs done', out.length + ' songs', fails + ' failed albums');
-          return { artist: r.artist, tracks: out.length ? out : r.top };
+          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist albums fail', e.code, e.message); return []; }),
+          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist singles fail', e.code, e.message); return []; })
+        ]).then(function (r) {
+          if (bad) delete cache[key];   // a partly failed page is fetched again next time
+          return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] };
         });
-      });
+      }); });
     },
 
     // Just the artist (one request, cached): what the Now Playing panel needs on every song change.
@@ -220,12 +192,12 @@ var Cat = (function () {
     },
     playlists: function () {
       if (!isSp()) return Promise.resolve(Library.playlists());
-      return memo('playlists', 120000, function () { return spAll('/me/playlists?limit=50', 500, playlist); });
+      return memo('playlists', 600000, function () { return spAll('/me/playlists?limit=50', 500, playlist); });
     },
-    albums: function () { return isSp() ? memo('albums', 120000, function () { return spAll('/me/albums?limit=50', 300, function (i) { return album(i.album); }); }) : Promise.resolve(Library.saved()); },
+    albums: function () { return isSp() ? memo('albums', 600000, function () { return spAll('/me/albums?limit=50', 300, function (i) { return album(i.album); }); }) : Promise.resolve(Library.saved()); },
     following: function () {
       if (!isSp()) return Promise.resolve(Library.following());
-      return memo('following', 120000, function () {
+      return memo('following', 600000, function () {
         var out = [];
         function page(url) { return SpotifyApi.get(url).then(function (j) { out = out.concat(clean(j.artists.items.map(artist))); return j.artists.next && out.length < 300 ? page(j.artists.next) : out; }); }
         return page('/me/following?type=artist&limit=50');
@@ -235,7 +207,7 @@ var Cat = (function () {
     topTracks: function () { return isSp() ? memo('topT', 600000, function () { return SpotifyApi.get('/me/top/tracks?limit=30&time_range=short_term').then(function (j) { return clean(j.items.map(function (t) { return track(t); })); }); }) : Promise.resolve([]); },
     recent: function () {
       if (!isSp()) return Promise.resolve(Library.recent());
-      return memo('recent', 60000, function () {
+      return memo('recent', 300000, function () {
         return SpotifyApi.get('/me/player/recently-played?limit=50').then(function (j) {
           var seen = {}, out = [];
           (j.items || []).forEach(function (i) {
@@ -243,13 +215,15 @@ var Cat = (function () {
             if (c && /^spotify:(album|playlist|artist):/.test(c.uri)) { if (!seen[c.uri]) { seen[c.uri] = 1; out.push({ kind: c.type, id: c.uri.split(':')[2], uri: c.uri, pending: true, art: t && t.album ? imgs(t.album.images) : '' }); } }
             else if (t && t.album && !seen[t.album.uri]) { seen[t.album.uri] = 1; out.push(album(t.album)); }
           });
-          // Contexts only come back as URIs: fetch their names and covers (single-ID endpoints in dev mode).
+          // Contexts only come back as URIs: their names and covers are looked up once and kept for a week.
+          // At most 8 new lookups per visit; the rest fill in on later visits.
+          var known = Store.get('ctxCache', {}), now = Date.now(), budget = 8;
           return Promise.all(out.slice(0, 16).map(function (x) {
             if (!x.pending) return x;
-            var path = x.kind === 'album' ? '/albums/' : x.kind === 'artist' ? '/artists/' : '/playlists/';
-            return SpotifyApi.get(path + x.id + (x.kind === 'playlist' ? '?fields=id,uri,name,images,owner,description,collaborative,items.total,tracks.total' : '')).then(function (d) {
-              return x.kind === 'album' ? album(d) : x.kind === 'artist' ? artist(d) : playlist(d);
-            }, function () { return x.kind === 'playlist' ? mix(x.id, x.art) : null; });
+            var k = known[x.uri];
+            if (k && now - k.t < 7 * 864e5) return k.v;
+            if (budget-- <= 0) return null;
+            return lookupContext(x).then(function (v) { if (v) { known[x.uri] = { t: now, v: v }; Store.set('ctxCache', known); } return v; });
           })).then(clean);
         });
       });

@@ -75,10 +75,13 @@ var Focus = (function () {
   // across the direction) beat diagonal ones.
   function score(dir, c, r) {
     var vert = dir === 'up' || dir === 'down', gap, ov, mid;
-    if (dir === 'down') { if (r.top + r.height / 2 <= c.top + c.height / 2 + 2 || r.bottom <= c.bottom - 1) return -1; gap = r.top - c.bottom; }
-    else if (dir === 'up') { if (r.top + r.height / 2 >= c.top + c.height / 2 - 2 || r.top >= c.top + 1) return -1; gap = c.top - r.bottom; }
-    else if (dir === 'right') { if (r.left + r.width / 2 <= c.left + c.width / 2 + 2 || r.right <= c.right - 1) return -1; gap = r.left - c.right; }
-    else { if (r.left + r.width / 2 >= c.left + c.width / 2 - 2 || r.left >= c.left + 1) return -1; gap = c.left - r.right; }
+    // A candidate must lie past the current element in that direction, give or take a few pixels of overlap
+    // (a big cover that merely starts further left is not "to the left" of a small icon above it).
+    var tv = Math.min(16, c.height / 2), th = Math.min(16, c.width / 2);
+    if (dir === 'down') { if (r.top < c.bottom - tv) return -1; gap = r.top - c.bottom; }
+    else if (dir === 'up') { if (r.bottom > c.top + tv) return -1; gap = c.top - r.bottom; }
+    else if (dir === 'right') { if (r.left < c.right - th) return -1; gap = r.left - c.right; }
+    else { if (r.right > c.left + th) return -1; gap = c.left - r.right; }
     // Lined-up items are ranked by centre or left edge, whichever is closer (a wide header lands on the first chip).
     if (vert) { ov = Math.min(c.right, r.right) - Math.max(c.left, r.left); mid = Math.min(Math.abs(r.left + r.right - c.left - c.right) / 2, Math.abs(r.left - c.left)); }
     else { ov = Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top); mid = Math.abs(r.top + r.bottom - c.top - c.bottom) / 2; }
@@ -112,10 +115,10 @@ var Focus = (function () {
     if (inBest && (dir === 'up' || dir === 'down')) best = inBest;
     if (!best) return;
     function ok(el) { return el && all.indexOf(el) >= 0; }
-    // Entering another area (library, main view, Now Playing, top bar, player bar) returns to where you were,
-    // when that spot is on screen and in the pressed direction.
+    // Entering another panel (library, main view, Now Playing) returns to where you were, when that spot is on
+    // screen and in the pressed direction. The top bar and player bar are toolbars: always the nearest button.
     var reg = best.closest('.region');
-    if (reg && reg !== cur.closest('.region') && ok(reg._last) && onScreen(reg._last) && score(dir, c, seen(reg._last)) >= 0) return set(reg._last);
+    if (reg && reg.id !== 'top' && reg.id !== 'bar' && reg !== cur.closest('.region') && ok(reg._last) && onScreen(reg._last) && score(dir, c, seen(reg._last)) >= 0) return set(reg._last);
     if (dir === 'up' || dir === 'down') {
       var row = best.closest('.hs');
       if (row && row !== cur.closest('.hs') && ok(row._last)) best = row._last;
