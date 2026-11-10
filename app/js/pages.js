@@ -16,12 +16,11 @@ var Account = (function () {
     }).then(function (info) {
       d = UI.dialog('Sign in with Spotify',
         '<div class="signin">' + UI.qr(info.phoneUrl, 320) + '<div class="si-steps">' +
-        '<div class="step"><b>1</b><span>Connect your phone to the <b>same Wi‑Fi as this TV</b> (not mobile data), then scan the code</span></div>' +
-        '<div class="step"><b>2</b><span>Your phone warns the TV’s connection isn’t private. Tap <i>Advanced → Continue</i>: it’s your TV’s own certificate</span></div>' +
-        '<div class="step"><b>3</b><span>Log in to Spotify and tap <i>Agree</i>. The TV signs in by itself.</span></div>' +
-        '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> in a browser on any computer on the same Wi‑Fi.</p>' +
-        '<p class="dim small">Waiting for you to log in…</p></div></div>' +
-        '<p class="dim small setup">First time only: in the Spotify developer dashboard, add <b>' + esc(info.callback) + '</b> as a Redirect URI, and add each person’s Spotify email under Users and Access.</p>',
+        '<div class="step"><b>1</b><span>Put your phone on the <b>same Wi‑Fi as this TV</b> and scan the code</span></div>' +
+        '<div class="step"><b>2</b><span>If the TV’s owner added your Spotify email, tap <i>Log in with Spotify</i>. Otherwise tap <i>Set up my own key</i>: a 3-minute guide (needs Premium)</span></div>' +
+        '<div class="step"><b>3</b><span>When your phone says the connection isn’t private, tap <i>Advanced → Continue</i>: it’s this TV’s own certificate</span></div>' +
+        '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> on any computer on the same Wi‑Fi.</p>' +
+        '<p class="dim small">Waiting for you to log in…</p></div></div>',
         [{ label: 'Cancel', onClick: function () { Spotify.stopLogin(); if (done) done(new Error('cancelled')); } }]);
     }, function (e) { UI.toast(e.message); if (done) done(e); });
   }
@@ -148,8 +147,9 @@ var Account = (function () {
       if (Spotify.linked()) {
         var me = Spotify.cachedMe() || { name: 'your account' }, st = Playback.spotify();
         row(s, 'user', 'Signed in as ' + me.name, 'Your playlists, Liked Songs and library sync live with Spotify', null);
+        row(s, 'link', Spotify.ownKey() ? 'Using your own Spotify key' : 'Using this TV’s Spotify key', Spotify.ownKey() ? 'Key ' + Spotify.clientId().slice(0, 6) + '…' : 'Shared by up to 5 accounts the owner allows', null);
         row(s, 'music', 'Spotify player on this TV', st.status === 'ready' ? 'Ready · shows up as “' + CFG.deviceName + '” in Spotify Connect' : st.status === 'error' ? st.error : st.status === 'loading' ? 'Starting…' : 'Starts when you play something', function () { Playback.initSpotify().then(function () { UI.toast('Spotify player ready'); UI.refresh(); }, function (e) { UI.toast(e.message); }); });
-        row(s, 'close', 'Sign out of Spotify', 'This profile goes back to free Audius music', function () { Spotify.unlink(); Cat.clear(); Profiles.linkSpotify(null); UI.toast('Signed out'); location.reload(); });
+        row(s, 'close', 'Sign out of Spotify', 'This profile goes back to free Audius music', function () { Spotify.unlink(); Spotify.forgetKey(); Cat.clear(); Profiles.linkSpotify(null); UI.toast('Signed out'); location.reload(); });
       } else {
         row(s, 'link', 'Sign in with Spotify', 'Play your Spotify music, playlists and Liked Songs on this TV (Premium)', function () { Account.signIn(function (err) { if (!err) location.reload(); }); });
       }
@@ -172,7 +172,14 @@ var Account = (function () {
     });
 
     section(root, 'Playback', function (s) {
-      row(s, 'lyrics', 'Lyrics timing', 'In the player: the − / + buttons, or the red and green remote buttons, move lyrics earlier or later (saved per song)', null);
+      var g = row(s, 'lyrics', '', '', function () {});
+      function paint() {
+        var o = Lyrics.globalOffset();
+        g.querySelector('.t').textContent = 'Lyrics delay for this TV: ' + (o === 0 ? 'none' : (Math.abs(o) / 1000).toFixed(1) + 's ' + (o > 0 ? 'earlier' : 'later'));
+        g.querySelector('.s').textContent = '◀ ▶ to adjust in 0.1s steps. Use it if lyrics are always off, e.g. with a soundbar. Songs can be fine-tuned in the player (Earlier / Later, or the red and green buttons).';
+      }
+      g._key = function (k) { if (k !== 'left' && k !== 'right') return false; Lyrics.setGlobal(Lyrics.globalOffset() + (k === 'left' ? -100 : 100)); paint(); return true; };
+      paint();
       if (!Spotify.linked()) row(s, 'music', 'Re-match imported songs', 'Look up playable versions again', function () { Library.clearMatches(); UI.toast('Matches cleared'); });
     });
 

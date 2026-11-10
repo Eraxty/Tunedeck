@@ -324,7 +324,7 @@ h3{font-size:26px;font-weight:700}
 .tog span{margin-left:8px}
 .tog.on{background:#fff;color:#000}
 .tog.focus{box-shadow:0 0 0 3px #fff}
-.t-early,.t-late{width:56px;padding:0;justify-content:center;font-size:30px}
+
 .pl-off{width:84px;text-align:center;font-size:18px;color:rgba(255,255,255,.75)}
 .pl-body{position:absolute;left:96px;right:96px;top:140px;bottom:250px;display:flex;align-items:center}
 .pl-left{width:540px;flex:none;display:flex;flex-direction:column}
@@ -442,3 +442,23 @@ h3{font-size:26px;font-weight:700}
 .no-cover .ln{color:rgba(255,255,255,.4)}
 .no-cover .ln.past{color:rgba(255,255,255,.65)}
 .no-cover .ln.on{color:#fff}
+
+/* player: both panels can be off (minimal), and a dark mode without album art behind */
+.pl-sync{display:flex;align-items:center;margin-left:10px}
+.t-early,.t-late{width:auto;padding:0 18px;font-size:18px}
+.pl-off{width:72px;text-align:center;font-size:18px;color:rgba(255,255,255,.75)}
+.no-cover.no-lyrics .pl-left{display:flex;width:100%;align-items:center;text-align:center}
+.no-cover.no-lyrics .pl-art{display:none}
+.no-cover.no-lyrics .pl-meta{margin:0;max-width:1400px}
+.no-cover.no-lyrics .pl-title{font-size:84px;letter-spacing:-2.5px}
+.no-cover.no-lyrics .pl-artist{font-size:38px;margin-top:12px}
+.no-cover.no-lyrics .pl-now{display:none}
+.no-cover.no-lyrics .pl-from{display:block}
+.no-lyrics .pl-sync{display:none}
+.player.dark .pl-bg{display:none}
+.player.dark .pl-shade,.player.dark.no-cover .pl-shade{background:#000;opacity:1}
+.player.dark .ln{color:rgba(255,255,255,.28)}
+.player.dark .ln.past{color:rgba(255,255,255,.5)}
+.player.dark .ln.on{color:#fff}
+.no-cover.no-lyrics .pl-meta{width:100%}
+.no-cover.no-lyrics .pl-title{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -20,28 +20,39 @@ var Spotify = (function () {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }, function () { throw fail('Cannot reach Spotify', 'network'); });
   }
 
+  // The Spotify app key (Client ID) this profile signs in with: the built-in one, or the person's own key
+  // (Spotify allows only 5 accounts per key for apps not run by a company, so others bring their own).
+  function clientId() { var a = auth(); return (a && a.clientId) || Store.get('clientId', null) || CFG.clientId; }
+
   // Starts a login; resolves with { phoneUrl } to show as a QR code. onDone(err) fires when it finishes.
+  // The phone page can send a different key mid-login; the login then restarts with that key.
   function startLogin(onDone) {
     stopLogin();
     return helper('/api/info').then(function (info) {
-      var verifier = b64url(randomBytes(48)), state = b64url(randomBytes(16));
-      var challenge = b64url(sha256(new TextEncoder().encode(verifier)));
-      var url = CFG.spotifyAuth + '/authorize?' + form({ client_id: CFG.clientId, response_type: 'code', redirect_uri: info.callback,
-        scope: CFG.spotifyScopes, state: state, code_challenge_method: 'S256', code_challenge: challenge });
-      return helper('/api/login', { method: 'POST', body: JSON.stringify({ url: url, state: state }) }).then(function () {
+      var verifier, cid;
+      function register() {
+        cid = Store.get('clientId', null) || CFG.clientId;
+        verifier = b64url(randomBytes(48));
+        var state = b64url(randomBytes(16)), challenge = b64url(sha256(new TextEncoder().encode(verifier)));
+        var url = CFG.spotifyAuth + '/authorize?' + form({ client_id: cid, response_type: 'code', redirect_uri: info.callback,
+          scope: CFG.spotifyScopes, state: state, code_challenge_method: 'S256', code_challenge: challenge });
+        return helper('/api/login', { method: 'POST', body: JSON.stringify({ url: url, state: state, clientId: cid }) });
+      }
+      return register().then(function () {
         poll = setInterval(function () {
           helper('/api/login/result').then(function (r) {
+            if (r.clientId) { Store.set('clientId', r.clientId); Log.add('own key received'); register(); return; }
             if (!r.code && !r.error) return;
             stopLogin();
             if (r.error) return onDone(fail(r.error === 'access_denied' ? 'Login was cancelled' : 'Spotify said: ' + r.error));
-            tokenRequest({ grant_type: 'authorization_code', code: r.code, redirect_uri: info.callback, client_id: CFG.clientId, code_verifier: verifier })
+            tokenRequest({ grant_type: 'authorization_code', code: r.code, redirect_uri: info.callback, client_id: cid, code_verifier: verifier })
               .then(function (res) {
                 if (!res.ok) throw fail(res.j.error_description || res.j.error || 'Login failed');
-                save(res.j, null); onDone(null);
+                save(res.j, { clientId: cid }); onDone(null);
               }).catch(onDone);
           }, function () {});
         }, 2000);
-        return { phoneUrl: info.phoneUrl + 'login', callback: info.callback };
+        return { phoneUrl: info.phoneUrl, callback: info.callback };
       });
     });
   }
@@ -50,14 +61,14 @@ var Spotify = (function () {
   function save(j, old) {
     access = j.access_token; exp = Date.now() + ((j.expires_in || 3600) - 60) * 1000;
     // Spotify may or may not return a new refresh token; keep the old one when it doesn't.
-    Store.set('spotify', { refresh_token: j.refresh_token || (old && old.refresh_token), linkedAt: (old && old.linkedAt) || Date.now() });
+    Store.set('spotify', { refresh_token: j.refresh_token || (old && old.refresh_token), linkedAt: (old && old.linkedAt) || Date.now(), clientId: (old && old.clientId) || clientId() });
   }
 
   function refresh() {
     if (pendingRefresh) return pendingRefresh;
     var cur = auth();
     if (!cur) return Promise.reject(fail('Spotify is not connected', 'login'));
-    pendingRefresh = tokenRequest({ grant_type: 'refresh_token', refresh_token: cur.refresh_token, client_id: CFG.clientId }).then(function (r) {
+    pendingRefresh = tokenRequest({ grant_type: 'refresh_token', refresh_token: cur.refresh_token, client_id: cur.clientId || clientId() }).then(function (r) {
       pendingRefresh = null;
       if (!r.ok) {
         if (r.j.error === 'invalid_grant') { Store.set('spotify', null); throw fail('Your Spotify link expired. Connect Spotify again in Settings.', 'login'); }
@@ -115,7 +126,8 @@ var Spotify = (function () {
 
   return {
     linked: function () { return !!auth(); }, linkedAt: function () { var a = auth(); return a && a.linkedAt; },
-    token: token, call: call, me: me, cachedMe: function () { return Store.get('spotifyMe', null); },
+    token: token, call: call, me: me, clientId: clientId, ownKey: function () { return clientId() !== CFG.clientId; },
+    forgetKey: function () { Store.set('clientId', null); }, cachedMe: function () { return Store.get('spotifyMe', null); },
     unlink: function () { Store.set('spotify', null); Store.set('spotifyMe', null); access = null; meP = null; },
     startLogin: startLogin, stopLogin: stopLogin, get: get, getAll: getAll,
   };

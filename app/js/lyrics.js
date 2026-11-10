@@ -48,8 +48,15 @@ var Lyrics = (function () {
     });
   }
 
-  function offset(uri) { return parseInt(localStorage.getItem('lyr.off.' + uri) || '0', 10); }
-  function setOffset(uri, ms) { try { localStorage.setItem('lyr.off.' + uri, String(ms)); } catch (e) {} }
+  // Timing: a positive offset shows lyrics earlier. The TV-wide offset covers audio delay from soundbars or
+  // Bluetooth and applies to every song; each song can be fine-tuned on top of it. Both are saved.
+  function num(k) { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (e) { return 0; } }
+  function put(k, v) { try { localStorage.setItem(k, String(Math.round(v))); } catch (e) {} }
+  function songOffset(uri) { return num('lyr.off.' + uri); }
+  function globalOffset() { return num('lyr.global'); }
+  function offset(uri) { return songOffset(uri) + globalOffset(); }
+  function setOffset(uri, ms) { put('lyr.off.' + uri, Math.max(-10000, Math.min(10000, ms))); }
+  function setGlobal(ms) { put('lyr.global', Math.max(-5000, Math.min(5000, ms))); }
 
   // Binary search for the active line at position pos (ms).
   function indexAt(lines, pos) {
@@ -58,5 +65,5 @@ var Lyrics = (function () {
     return ans;
   }
 
-  return { load: load, offset: offset, setOffset: setOffset, indexAt: indexAt };
+  return { load: load, offset: offset, songOffset: songOffset, setOffset: setOffset, globalOffset: globalOffset, setGlobal: setGlobal, indexAt: indexAt };
 })();

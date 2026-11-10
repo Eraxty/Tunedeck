@@ -437,7 +437,7 @@ var UI = (function () {
   }
 
   // ---------- full-screen player: cover and lyrics, each toggleable ----------
-  function prefs() { return Store.get('player', { cover: true, lyrics: true }); }
+  function prefs() { var p = Store.get('player', null) || {}; return { cover: p.cover !== false, lyrics: p.lyrics !== false, dark: !!p.dark }; }
   function openPlayer(mode) {
     if (!Playback.state.track) return toast('Play something first');
     if (mode === 'lyrics') { var p = prefs(); if (!p.lyrics) { p.lyrics = true; Store.set('player', p); } }
@@ -445,7 +445,8 @@ var UI = (function () {
     var L = layer('full player', '<div class="pl-bg"></div><div class="pl-shade"></div>' +
       '<div class="pl-top"><button class="pill f pl-back">' + Icon('back', 28) + '<span>Back</span></button><div class="pl-from"></div><div class="pl-now"><span class="pn-c"></span><span><b class="pn-t"></b><span class="pn-a"></span></span></div>' +
       '<div class="pl-toggles"><button class="tog f t-cover">' + Icon('image', 26) + '<span>Cover</span></button><button class="tog f t-lyrics">' + Icon('lyrics', 26) + '<span>Lyrics</span></button>' +
-      '<button class="tog f t-early">−</button><span class="pl-off">0.0s</span><button class="tog f t-late">+</button></div></div>' +
+      '<button class="tog f t-dark">' + Icon('moon', 26) + '<span>Dark</span></button>' +
+      '<span class="pl-sync"><button class="tog f t-early">Earlier</button><span class="pl-off">0.0s</span><button class="tog f t-late">Later</button></span></div></div>' +
       '<div class="pl-body"><div class="pl-left"><div class="pl-art"></div><div class="pl-meta"><div class="pl-title"></div><div class="pl-artist"></div></div></div>' +
       '<div class="pl-lyrics"><div class="pl-view"><div class="pl-lines"></div></div><div class="pl-empty"></div></div></div>' +
       '<div class="pl-foot"><div class="pl-ctl"></div><div class="pl-extra"></div></div>', { onClose: function () { els.player = null; } });
@@ -459,21 +460,22 @@ var UI = (function () {
     seekRow($('.pl-foot', L.el));
     $('.t-cover', L.el).onclick = function () { toggle('cover'); };
     $('.t-lyrics', L.el).onclick = function () { toggle('lyrics'); };
-    $('.t-early', L.el).onclick = function () { nudge(-250); };
-    $('.t-late', L.el).onclick = function () { nudge(250); };
+    $('.t-dark', L.el).onclick = function () { toggle('dark'); };
+    // Holding OK on these repeats (the remote sends repeated key presses), for big corrections.
+    $('.t-early', L.el).onclick = function () { nudge(100); };
+    $('.t-late', L.el).onclick = function () { nudge(-100); };
     fillPlayer(); onState(Playback.state); syncLikeIcons();
     setTimeout(function () { Focus.set($('.c-play.big', L.el)); }, 0);
   }
   function toggle(what) {
     var p = prefs(); p[what] = !p[what];
-    if (!p.cover && !p.lyrics) p[what === 'cover' ? 'lyrics' : 'cover'] = true;
     Store.set('player', p); applyPlayerMode();
   }
   function applyPlayerMode() {
     var P = els.player; if (!P) return;
     var p = prefs();
-    P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics);
-    $('.t-cover', P).classList.toggle('on', p.cover); $('.t-lyrics', P).classList.toggle('on', p.lyrics);
+    P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics); P.classList.toggle('dark', p.dark);
+    $('.t-cover', P).classList.toggle('on', p.cover); $('.t-lyrics', P).classList.toggle('on', p.lyrics); $('.t-dark', P).classList.toggle('on', p.dark);
     lyr.idx = -2;
   }
   function fillPlayer() {
@@ -484,7 +486,7 @@ var UI = (function () {
     setArt($('.pn-c', P), t.cover_small || t.album_cover_url); $('.pn-t', P).textContent = t.name; $('.pn-a', P).textContent = t.artist_names.join(', ');
     var ctx = Playback.context();
     $('.pl-from', P).innerHTML = ctx && ctx.name ? '<span class="dim">Playing from</span> ' + esc(ctx.name) : '';
-    $('.pl-off', P).textContent = (Lyrics.offset(t.uri) >= 0 ? '+' : '') + (Lyrics.offset(t.uri) / 1000).toFixed(2) + 's';
+    $('.pl-off', P).textContent = syncLabel(t);
     applyPlayerMode(); renderPlayerLyrics();
   }
   function renderPlayerLyrics() {
@@ -511,12 +513,13 @@ var UI = (function () {
     P.classList.add('lyr-none');
     empty.innerHTML = '<div class="em-icon">' + Icon('lyrics', 56) + '</div><h3>No lyrics for this one</h3><p class="dim">We couldn’t find lyrics for “' + esc(t ? t.name : '') + '”.</p>';
   }
+  function syncLabel(t) { var o = Lyrics.songOffset(t.uri); return (o > 0 ? '+' : o < 0 ? '−' : '') + (Math.abs(o) / 1000).toFixed(1) + 's'; }
   function nudge(ms) {
     var t = Playback.state.track; if (!t) return;
-    Lyrics.setOffset(t.uri, Lyrics.offset(t.uri) + ms); lyr.idx = -2;
-    var s = (Lyrics.offset(t.uri) >= 0 ? '+' : '') + (Lyrics.offset(t.uri) / 1000).toFixed(2) + 's';
-    if (els.player) $('.pl-off', els.player).textContent = s;
-    toast('Lyrics timing ' + s);
+    Lyrics.setOffset(t.uri, Lyrics.songOffset(t.uri) + ms); lyr.idx = -2;
+    var o = Lyrics.songOffset(t.uri), s = o === 0 ? 'Lyrics timing reset' : 'Lyrics ' + (Math.abs(o) / 1000).toFixed(1) + 's ' + (o > 0 ? 'earlier' : 'later') + ' for this song';
+    if (els.player) $('.pl-off', els.player).textContent = syncLabel(t);
+    toast(s);
   }
 
   // ---------- clock ----------
@@ -549,7 +552,7 @@ var UI = (function () {
     Focus.on('chup', Playback.next); Focus.on('chdown', Playback.prev);
     Focus.on('yellow', function () { openPlayer('lyrics'); });
     Focus.on('blue', function () { openPlayer(); });
-    Focus.on('any', function (k) { if (k === 'red' || k === 'green') { nudge(k === 'red' ? -250 : 250); return true; } return false; });
+    Focus.on('any', function (k) { if (k === 'red' || k === 'green') { nudge(k === 'red' ? 100 : -100); return true; } return false; });
     onState(Playback.state);
     setNpv(true);
     requestAnimationFrame(tick);
