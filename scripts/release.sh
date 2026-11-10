@@ -11,6 +11,10 @@ VER=$(python3 -c 'import json; print(json.load(open("app/appinfo.json"))["versio
 CFG_VER=$(sed -n "s/.*version: '\([0-9.]*\)'.*/\1/p" app/js/config.js)
 [ "$VER" = "$CFG_VER" ] || { echo "appinfo.json ($VER) and config.js ($CFG_VER) versions differ"; exit 1; }
 
+# Only files git knows about may ship: anything untracked in app/ (tool caches, test output) stops the build.
+EXTRA=$(git ls-files --others --exclude-standard app; git ls-files --others --ignored --exclude-standard app)
+[ -z "$EXTRA" ] || { echo "Untracked files in app/ would be packaged:"; echo "$EXTRA"; exit 1; }
+
 rm -rf dist && mkdir -p dist
 ares-package --no-minify app -o dist > /dev/null
 IPK=dist/${ID}_${VER}_all.ipk
