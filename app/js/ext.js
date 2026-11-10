@@ -64,17 +64,14 @@ var Ext = (function () {
 
   // Spicetify-compatible subset
   var Player = {
-    get data() { var s = Api.state.status; return s && { track: s.track && { uri: s.track.uri, metadata: { title: s.track.name, artist_name: s.track.artist_names.join(', '), album_title: s.track.album_name, image_url: s.track.album_cover_url } }, isPaused: s.paused, duration: s.track && s.track.duration }; },
-    getProgress: function () { return UI.progress(); },
-    getDuration: function () { var s = Api.state.status; return s && s.track ? s.track.duration : 0; },
-    isPlaying: function () { var s = Api.state.status; return !!s && !s.paused && !s.stopped; },
-    togglePlay: Api.toggle, play: Api.resume, pause: Api.pause, next: Api.next, back: Api.prev,
-    seek: Api.seek, setVolume: function (v) { return Api.volume(Math.round(v * (Api.state.status ? Api.state.status.volume_steps : 100))); },
-    getVolume: function () { var s = Api.state.status; return s ? s.volume / s.volume_steps : 0; },
+    get data() { var t = Playback.state.track; return t && { track: { uri: t.uri, metadata: { title: t.name, artist_name: t.artist_names.join(', '), album_title: t.album_name, image_url: t.album_cover_url } }, isPaused: Playback.state.paused, duration: Playback.duration() }; },
+    getProgress: Playback.position, getDuration: Playback.duration,
+    isPlaying: function () { return !!Playback.state.track && !Playback.state.paused; },
+    togglePlay: Playback.toggle, play: Playback.resume, pause: Playback.pause, next: Playback.next, back: Playback.prev,
+    seek: Playback.seek, setVolume: Playback.volume, getVolume: function () { return Playback.volume(); },
     addEventListener: function (type, fn) {
-      var map = { songchange: 'metadata', onplaypause: 'playing', onprogress: 'seek' };
-      Api.on(map[type] || type, fn);
-      if (type === 'onplaypause') Api.on('paused', fn);
+      if (type === 'songchange') Playback.on('track', fn);
+      else if (type === 'onplaypause') Playback.on('state', fn);
     }
   };
 
@@ -87,7 +84,6 @@ var Ext = (function () {
       Menu: { Item: function (label, active, onClick) { var i = { label: label, onClick: onClick }; menus.push(i); this.register = function () {}; this.deregister = function () {}; } },
       Topbar: { Button: function (label, icon, onClick) { var b = { label: label, onClick: onClick }; topbar.push(b); this.element = b; } },
       URI: { fromString: function (s) { var p = s.split(':'); return { type: p[1], id: p[2], uri: s }; } },
-      CosmosAsync: { get: Api.get, post: Api.post },
       Platform: { version: CFG.version }
     };
     applyTheme();

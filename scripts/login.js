@@ -9,8 +9,8 @@ const REDIRECT = 'http://127.0.0.1:8888/callback';
 const TV = process.env.TV_HOST || 'root@192.168.1.3';
 const APP_DIR = '/media/developer/apps/usr/palm/applications/com.ice.tunedeck';
 const OUT = path.join(__dirname, '..', 'app', 'js', 'auth.local.js');
-// Search needs no scopes; add here only when a feature actually needs one.
-const SCOPES = '';
+// Only what library import needs: the user's playlists and their Liked Songs. Read-only.
+const SCOPES = 'playlist-read-private playlist-read-collaborative user-library-read';
 
 const b64 = (b) => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const verifier = b64(crypto.randomBytes(64));

@@ -41,10 +41,11 @@ var WebApi = (function () {
   function token() { return access && Date.now() < exp ? Promise.resolve(access) : refresh(); }
   function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
 
+  // `path` is an API path or a full `next` URL from a paging object.
   function get(path, attempt) {
     attempt = attempt || 0;
     return token().then(function (t) {
-      return fetch(CFG.webapi + path, { headers: { Authorization: 'Bearer ' + t } });
+      return fetch(path.indexOf('https://') === 0 ? path : CFG.webapi + path, { headers: { Authorization: 'Bearer ' + t } });
     }).then(function (r) {
       if (r.ok) return r.json();
       if (r.status === 401 && attempt < 1) { access = null; return get(path, attempt + 1); }
@@ -55,14 +56,25 @@ var WebApi = (function () {
         return wait(ms).then(function () { return get(path, attempt + 1); });
       }
       return r.json().catch(function () { return {}; }).then(function (j) {
-        throw fail((j.error && j.error.message) || ('Spotify error ' + r.status), r.status);
+        var msg = (j.error && j.error.message) || ('Spotify error ' + r.status);
+        if (r.status === 403 && /scope/i.test(msg)) msg = 'Spotify login is missing permissions. Run scripts/login.js on the laptop again.';
+        throw fail(msg, r.status);
       });
     });
   }
 
-  return {
-    get: get,
-    loggedIn: function () { return !!current(); },
-    search: function (q) { return get('/search?type=track&limit=10&q=' + encodeURIComponent(q)); }
-  };
+  // Follows `next` links and collects every item, up to `cap`.
+  function getAll(path, cap, onPage) {
+    var out = [];
+    function page(p) {
+      return get(p).then(function (j) {
+        out = out.concat(j.items || []);
+        if (onPage) onPage(out.length, j.total);
+        return j.next && out.length < (cap || 5000) ? page(j.next) : out;
+      });
+    }
+    return page(path);
+  }
+
+  return { get: get, getAll: getAll, loggedIn: function () { return !!current(); } };
 })();

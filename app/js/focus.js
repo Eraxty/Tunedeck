@@ -15,6 +15,7 @@ var Focus = (function () {
     if (!el) return;
     if (cur) cur.classList.remove('focus');
     cur = el; el.classList.add('focus');
+    if (handlers.focus) handlers.focus(el);
     var sc = el.closest('.scroll');
     if (sc) {
       var r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
