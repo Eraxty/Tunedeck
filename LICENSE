@@ -19,7 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Bundled third-party code keeps its own licence: Babel standalone (MIT, app/js/vendor/babel.LICENSE),
-qrcode-generator by Kazuhiko Arase (MIT, header of app/js/vendor/qrcode.js), Figtree font (SIL OFL 1.1,
-app/fonts/OFL.txt).
