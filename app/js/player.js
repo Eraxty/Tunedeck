@@ -101,7 +101,9 @@ var Playback = (function () {
   // ---------------- Audius engine ----------------
   // Two <audio> elements so the end of one song and the start of the next can really overlap (crossfade).
   // Audius audio is plain MP3 with CORS, so it can also run through Web Audio for the 8D effect.
-  var els = [new Audio(), new Audio()], ai = 0, queue = [], idx = -1, errors = 0, xf = null;
+  // queue is the play order. While shuffle is on it holds the current song followed by the rest in a random
+  // order, and orig keeps the list's own order for when shuffle is turned off again.
+  var els = [new Audio(), new Audio()], ai = 0, queue = [], orig = null, idx = -1, errors = 0, xf = null;
   function au() { return els[ai]; }
   els.forEach(function (a, n) {
     a.preload = 'auto'; a.crossOrigin = 'anonymous';
@@ -130,10 +132,23 @@ var Playback = (function () {
     a.src = Sources.url(t.src);
     var p = a.play(); if (p && p.catch) p.catch(function () {});
   }
-  // Which song comes next (respecting shuffle and repeat), or -1 at the end of the queue.
+  // first, then the other songs of list in a random order (each once).
+  function shuffled(list, first) {
+    var rest = list.filter(function (t) { return t !== first; });
+    for (var i = rest.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = rest[i]; rest[i] = rest[j]; rest[j] = x; }
+    return [first].concat(rest);
+  }
+  // Turning shuffle on keeps the current song playing and shuffles what follows; turning it off goes back
+  // to the list's order, carrying on after the current song.
+  function reorder(on) {
+    var t = queue[idx]; if (!t) return;
+    if (on && !orig) { orig = queue; queue = shuffled(queue, t); idx = 0; }
+    else if (!on && orig) { queue = orig; orig = null; idx = Math.max(0, queue.indexOf(t)); }
+    emit('queue');
+  }
+  // Which song comes next (respecting repeat), or -1 at the end of the queue.
   function nextIndex(dir, auto) {
     if (!queue.length) return -1;
-    if (state.shuffle && queue.length > 1) { var n; do { n = Math.floor(Math.random() * queue.length); } while (n === idx); return n; }
     var i = idx + dir;
     if (i >= queue.length) return state.repeat === 'all' || !auto ? 0 : -1;
     return i < 0 ? queue.length - 1 : i;
@@ -212,24 +227,27 @@ var Playback = (function () {
   // ctx: where playback came from ({ kind, id, uri, name, cover }) for "recently played" and Spotify contexts.
   function play(tracks, start, ctx) {
     context = ctx || null;
-    var list = tracks.filter(function (t) { return t && t.src; }), first = tracks[start || 0] || list[0];
+    var list = tracks.filter(function (t) { return t && t.src; }), first = tracks[start || 0] || list[0], shuf = state.shuffle;
     if (!first) return;
+    // Play with shuffle on starts at a random song; picking a song starts there. Either way the rest is shuffled.
+    if (shuf && start == null) first = list[Math.floor(Math.random() * list.length)];
     if (first.src.source === 'spotify') {
       if (state.engine === 'audius') { endCrossfade(); au().pause(); }
       state.engine = 'spotify';
-      var body;
-      if (ctx && ctx.uri && /^spotify:(album|playlist|artist):/.test(ctx.uri)) body = start == null ? { context_uri: ctx.uri } : { context_uri: ctx.uri, offset: { uri: first.uri } };
+      var body, uri = function (t) { return t.uri; };
+      if (ctx && ctx.uri && /^spotify:(album|playlist|artist):/.test(ctx.uri)) body = start == null && !shuf ? { context_uri: ctx.uri } : { context_uri: ctx.uri, offset: { uri: first.uri } };
+      else if (shuf) body = { uris: shuffled(list, first).slice(0, 100).map(uri), offset: { position: 0 } };
       else {
-        var i = Math.max(0, list.indexOf(first)), from = Math.max(0, i - 20), uris = list.slice(from, from + 100).map(function (t) { return t.uri; });
-        body = { uris: uris, offset: { position: i - from } };
+        var i = Math.max(0, list.indexOf(first)), from = Math.max(0, i - 20);
+        body = { uris: list.slice(from, from + 100).map(uri), offset: { position: i - from } };
       }
-      return spPlay(body);
+      // Spotify may not have taken the shuffle setting while the TV wasn't its active device yet.
+      return spPlay(body).then(function () { if (shuf && sp.device) return SpotifyApi.call('PUT', spDev('/me/player/shuffle?state=true')).catch(function () {}); });
     }
     if (state.engine === 'spotify' && sp.player) sp.player.pause();
     endCrossfade();
-    queue = list; idx = Math.max(0, queue.indexOf(first)); errors = 0;
+    queue = shuf ? shuffled(list, first) : list; orig = shuf ? list : null; idx = Math.max(0, queue.indexOf(first)); errors = 0;
     route(au());
-    if (state.shuffle && start == null) idx = Math.floor(Math.random() * queue.length);
     auLoad(); emit('queue');
   }
   function playContext(ctx) { context = ctx; state.engine = 'spotify'; return spPlay({ context_uri: ctx.uri }); }
@@ -259,7 +277,8 @@ var Playback = (function () {
     eightD: function (on) { if (on != null) setEightD(on); return eightD(); },
     fade: function (ms) { if (ms != null) { fadeMs = ms; Store.set('fadeMs', ms); } return fadeLength(); },
     setShuffle: function (v) {
-      state.shuffle = !!v; emit('state', state);
+      var was = state.shuffle; state.shuffle = !!v; emit('state', state);
+      if (!isSp() && was !== state.shuffle) reorder(state.shuffle);
       if (isSp() && sp.device) SpotifyApi.call('PUT', spDev('/me/player/shuffle?state=' + !!v)).catch(function (e) { Log.add('shuffle', e.message); });
     },
     setRepeat: function (v) {
@@ -269,6 +288,7 @@ var Playback = (function () {
     enqueue: function (t) {
       if (!t || !t.src) return;
       if (t.src.source === 'spotify') { spInit().then(function () { return SpotifyApi.call('POST', spDev('/me/player/queue?uri=' + encodeURIComponent(t.uri))); }).then(function () { emit('queue'); }, function (e) { emit('error', { message: e.message }); }); return; }
+      if (orig) orig.splice(orig.indexOf(queue[idx]) + 1, 0, t);
       queue.splice(idx + 1, 0, t); emit('queue'); if (idx < 0) { idx = 0; auLoad(); }
     },
     // i is a position in list (what the queue page shows: the current song first).

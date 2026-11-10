@@ -129,11 +129,13 @@ var Cat = (function () {
               if (!mine || seen[key]) return false; seen[key] = 1; return true;
             }).map(function (t) { return track(t); }));
           }),
-          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist albums fail', e.code, e.message); return []; }),
-          spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist singles fail', e.code, e.message); return []; })
+          // Albums, then singles: Spotify rate-limits this endpoint hard, so not both at once.
+          spAll('/artists/' + id + '/albums?include_groups=album&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist albums fail', e.code, e.message); return []; }).then(function (albums) {
+            return spAll('/artists/' + id + '/albums?include_groups=single&limit=10', 40, album).catch(function (e) { bad = true; Log.add('artist singles fail', e.code, e.message); return []; }).then(function (singles) { return [albums, singles]; });
+          })
         ]).then(function (r) {
           if (bad) delete cache[key];   // a partly failed page is fetched again next time
-          return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] };
+          return { artist: ar, top: r[0], albums: r[1][0], singles: r[1][1], playlists: [] };
         });
       }); });
     },
@@ -229,14 +231,26 @@ var Cat = (function () {
       });
     },
     // Newest releases from the artists you listen to most (Spotify's "new releases" endpoint is gone in dev mode).
+    // One artist at a time, stopping when Spotify says slow down, and kept for 12 hours: this endpoint is
+    // rate-limited hard, and asking for eight artists at once at every start was refused every time.
     newFromArtists: function () {
       if (!isSp()) return Promise.resolve([]);
       return memo('newrel', 3600000, function () {
+        var kept = Store.get('newrel', null);
+        if (kept && Date.now() - kept.t < 43200000) return Promise.resolve(kept.v);
         return this.topArtists().then(function (as) {
-          return Promise.all(as.slice(0, 8).map(function (a) { return SpotifyApi.get('/artists/' + a.id + '/albums?include_groups=album,single&limit=3').then(function (j) { return j.items.map(album); }, function () { return []; }); }));
-        }).then(function (lists) {
-          var all = [].concat.apply([], lists); all.sort(function (a, b) { return b.year.localeCompare(a.year); });
-          return all.slice(0, 20);
+          var lists = [], stop = false;
+          return as.slice(0, 8).reduce(function (p, a) {
+            return p.then(function () {
+              if (stop) return;
+              return SpotifyApi.get('/artists/' + a.id + '/albums?include_groups=album,single&limit=3').then(function (j) { lists.push(j.items.map(album)); }, function (e) { if (e.code === 429) stop = true; });
+            });
+          }, Promise.resolve()).then(function () {
+            var all = [].concat.apply([], lists); all.sort(function (a, b) { return b.year.localeCompare(a.year); });
+            all = clean(all).slice(0, 20);
+            if (!stop && all.length) Store.set('newrel', { t: Date.now(), v: all });
+            return all;
+          });
         });
       }.bind(this));
     },

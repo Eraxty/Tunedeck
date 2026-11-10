@@ -265,7 +265,7 @@ var Ext = (function () {
       Queue: { get nextTracks() { return Playback.queue().slice(Playback.index() + 1).map(function (t) { return { contextTrack: { uri: t.uri, metadata: { title: t.name } } }; }); } },
       Keyboard: { registerShortcut: function () {}, _deregisterShortcut: function () {} },
       SVGIcons: {},
-      colorExtractor: function () { var c = getComputedStyle(document.documentElement).getPropertyValue('--accent-art').trim() || '#3d3360'; return Promise.resolve({ VIBRANT: c, PROMINENT: c, DESATURATED: c, LIGHT_VIBRANT: c, DARK_VIBRANT: c, VIBRANT_NON_ALARMING: c }); },
+      colorExtractor: function () { var c = getComputedStyle(document.getElementById('npv')).getPropertyValue('--accent-art').trim() || '#3d3360'; return Promise.resolve({ VIBRANT: c, PROMINENT: c, DESATURATED: c, LIGHT_VIBRANT: c, DARK_VIBRANT: c, VIBRANT_NON_ALARMING: c }); },
       Platform: { version: CFG.version, History: { push: function () {}, listen: function () {} } },
       Mousetrap: { bind: function () {} }, React: null, ReactDOM: null
     };

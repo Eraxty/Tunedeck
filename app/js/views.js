@@ -157,7 +157,7 @@
       var ctx = { name: 'Liked Songs', kind: 'mine', view: 'liked', id: 'liked' };
       if (!tracks.length) return empty(body, 'Songs you like will appear here', 'Save songs by pressing the heart.');
       UI.actionBtn(act, 'play', '', function () { Playback.play(tracks, 0, ctx); }, 'primary default');
-      UI.actionBtn(act, 'shuffle', 'Shuffle', function () { Playback.setShuffle(true); Playback.play(tracks, Math.floor(Math.random() * tracks.length), ctx); });
+      UI.shuffleBtn(act);
       UI.trackList(body, tracks, { onPick: function (i) { Playback.play(tracks, i, ctx); } });
       Focus.first(root);
     }, function (e) { body.innerHTML = '<p class="dim pad">' + esc(e.message) + '</p>'; });
@@ -179,7 +179,7 @@
       if (!found[i]) UI.toast('That song isn’t available, playing the next one');
     }
     UI.actionBtn(act, 'play', '', function () { playFrom(0); }, 'primary default');
-    UI.actionBtn(act, 'shuffle', 'Shuffle', function () { Playback.setShuffle(true); var q = found.filter(Boolean); if (q.length) Playback.play(q, null, ctx); });
+    UI.shuffleBtn(act);
     UI.actionBtn(act, 'trash', 'Remove', function () {
       UI.dialog('Remove “' + p.name + '”?', '<p class="dim">' + (local ? 'This deletes the playlist.' : 'It comes back the next time you import.') + '</p>', [{ label: 'Cancel' }, { label: 'Remove', onClick: function () { Library.removePlaylist(p.id); UI.go('library'); } }]);
     });
@@ -203,7 +203,7 @@
       var n = tracks ? tracks.length : c.count, sub = '<b>' + esc(c.owner) + '</b>' + (c.year ? ' · ' + c.year : '') + (n ? ' · ' + n + ' songs' : '') + (total ? ' · ' + Math.round(total / 60000) + ' min' : '');
       var act = UI.pageHeader(root, { over: c.kind === 'album' ? (c.type === 'single' ? 'Single' : 'Album') : 'Playlist', title: c.name, cover: c.cover_big || c.cover, desc: (c.description || '').slice(0, 180), sub: sub });
       UI.actionBtn(act, 'play', '', function () { if (tracks && tracks.length) Playback.play(tracks, null, ctx); else if (c.uri) Playback.playContext(ctx); }, 'primary default');
-      UI.actionBtn(act, 'shuffle', 'Shuffle', function () { Playback.setShuffle(true); if (tracks && tracks.length) Playback.play(tracks, Math.floor(Math.random() * tracks.length), ctx); else Playback.playContext(ctx); });
+      UI.shuffleBtn(act);
       var sv = UI.actionBtn(act, 'plus', 'Save', function () {
         Cat.toggleSaved(c).then(function (on) { paintSave(on); UI.toast(on ? 'Saved to Your Library' : 'Removed from Your Library'); UI.buildLibrary(); }, function (e) { UI.toast(e.message); });
       });

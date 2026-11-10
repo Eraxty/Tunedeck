@@ -87,14 +87,18 @@ var SpotifyApi = (function () {
   function get(path, attempt) { return call('GET', path, null, attempt); }
   // After a 429 nothing is sent until Spotify's Retry-After has passed: asking again while blocked only makes
   // the block longer. Short waits are sat out; long ones fail at once with a clear message.
-  var coolUntil = 0;
+  var coolUntil = 0, line = Promise.resolve();
   function slowDown() { return fail('Spotify asked TuneDeck to slow down. Try again in ' + Math.ceil((coolUntil - Date.now()) / 1000) + ' s.', 429); }
   // Web API call with token refresh, 401 retry and 429 backoff honouring Retry-After.
   function call(method, path, body, attempt) {
     attempt = attempt || 0;
     var cool = coolUntil - Date.now();
     if (cool > 30000) return Promise.reject(slowDown());
-    if (cool > 0) return wait(cool).then(function () { return call(method, path, body, attempt); });
+    // Requests held back by a cooldown go out one by one afterwards, not all together into another 429.
+    if (cool > 0) {
+      line = line.then(function () { return wait(Math.max(0, coolUntil - Date.now()) + 300); });
+      return line.then(function () { return call(method, path, body, attempt); });
+    }
     return token().then(function (t) {
       var opts = { method: method, headers: { Authorization: 'Bearer ' + t } };
       if (body !== null && body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }

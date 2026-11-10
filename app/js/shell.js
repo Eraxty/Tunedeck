@@ -133,6 +133,13 @@ var UI = (function () {
     var b = h('button', 'abtn f ' + (cls || ''), Icon(icon, cls && cls.indexOf('primary') >= 0 ? 40 : 30) + (label ? '<span>' + esc(label) + '</span>' : ''));
     b.onclick = onClick; parent.appendChild(b); return b;
   }
+  // Shuffle on a page switches shuffle on or off, as in Spotify; it doesn't start anything. Play then goes
+  // through the songs in a shuffled order.
+  function shuffleBtn(parent) {
+    return actionBtn(parent, 'shuffle', 'Shuffle', function () {
+      Playback.setShuffle(!Playback.state.shuffle); toast(Playback.state.shuffle ? 'Shuffle on' : 'Shuffle off');
+    }, 'c-shuffle' + (Playback.state.shuffle ? ' on' : ''));
+  }
 
   // ---------- router ----------
   var TOP = ['home', 'search', 'library', 'market', 'settings', 'queue'];
@@ -373,7 +380,14 @@ var UI = (function () {
     var img = new Image();
     img.onload = function () { bgImg = img; paintBlur(next, img); next.style.opacity = 1; prev.style.opacity = 0; bgFlip ^= 1; if (els.player) paintBlur($('.pl-bg', els.player), img); };
     img.src = url;
-    tintFrom(url, document.documentElement, '--accent-art');
+    tintFrom(t.cover_small || url, null, '--accent-art');
+  }
+  // The song's colour goes only on the panels that use it: set on the page root, it would restyle every
+  // element on screen at each song change, a stall the Spotify player can feel on this TV.
+  var accent = '';
+  function setAccent(col) {
+    if (col) accent = col;
+    [els.npv, els.player].forEach(function (e) { if (e && accent) e.style.setProperty('--accent-art', accent); });
   }
   // Dominant colour of an image (needs CORS). Used for the lyrics card, the player and page header tints.
   function tintFrom(url, el, prop) {
@@ -387,7 +401,7 @@ var UI = (function () {
         r /= n; g /= n; b /= n;
         var l = (Math.max(r, g, b) + Math.min(r, g, b)) / 2, k = l > 105 ? 105 / l : l < 50 ? 60 / Math.max(l, 1) : 1;
         var col = 'rgb(' + Math.round(r * k) + ',' + Math.round(g * k) + ',' + Math.round(b * k) + ')';
-        if (prop) el.style.setProperty(prop, col); else { el.style.setProperty('--tint', col); els.main.style.setProperty('--tint', col); }
+        if (prop === '--accent-art') setAccent(col); else if (prop) el.style.setProperty(prop, col); else { el.style.setProperty('--tint', col); els.main.style.setProperty('--tint', col); }
       } catch (e) {}
     };
     img.src = url;
@@ -497,7 +511,7 @@ var UI = (function () {
       '<div class="pl-body"><div class="pl-left"><div class="pl-art"></div><div class="pl-meta"><div class="pl-title"></div><div class="pl-artist"></div></div></div>' +
       '<div class="pl-lyrics"><div class="pl-view"><div class="pl-lines"></div></div><div class="pl-empty"></div></div></div>' +
       '<div class="pl-foot"><div class="pl-ctl"></div><div class="pl-extra"></div></div>', { onClose: function () { els.player = null; } });
-    els.player = L.el;
+    els.player = L.el; setAccent();
     $('.pl-back', L.el).onclick = L.close;
     controls($('.pl-ctl', L.el), true);
     var ex = $('.pl-extra', L.el);
@@ -620,7 +634,7 @@ var UI = (function () {
   }
 
   return {
-    init: init, go: go, back: back, refresh: refresh, register: function (id, fn) { views[id] = fn; }, buildLibrary: buildLibrary, buildTop: buildTop,
+    init: init, go: go, back: back, refresh: refresh, register: function (id, fn) { views[id] = fn; }, buildLibrary: buildLibrary, buildTop: buildTop, shuffleBtn: shuffleBtn,
     h: h, esc: esc, fmt: fmt, ago: ago, count: count, bg: bg, lazy: lazy, card: card, tile: tile, shelf: shelf, open: open,
     trackList: trackList, pageHeader: pageHeader, actionBtn: actionBtn, layer: layer, dialog: dialog, askText: askText, qr: qr,
     toast: toast, addToPlaylist: addToPlaylist, openPlayer: openPlayer, current: function () { return current; }

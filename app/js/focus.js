@@ -63,10 +63,23 @@ var Focus = (function () {
     while (p && p !== document.body) { if (p.classList && p.classList.contains('vs')) return p.getBoundingClientRect(); p = p.parentNode; }
     return { top: 0, bottom: window.innerHeight };
   }
-  function onScreen(el) { var r = el.getBoundingClientRect(), c = clip(el); return r.bottom > c.top + 8 && r.top < c.bottom - 8; }
+  // Where el will be once its list has finished sliding. A key pressed while the slide is still running (the
+  // TV takes a while) must not see the new item as off screen, or focus would jump back across the list.
+  var gen = 0;
+  function rect(el) {
+    var r = el.getBoundingClientRect(), p = el.closest('.vs');
+    if (!p) return r;
+    if (p._gen !== gen) {
+      var m = getComputedStyle(p.firstElementChild).transform, v = m && m !== 'none' ? m.slice(m.indexOf('(') + 1, -1).split(',') : null;
+      p._gen = gen; p._drift = (v ? -parseFloat(v[v.length === 16 ? 13 : 5]) : 0) - (p._off || 0);
+    }
+    if (!p._drift) return r;
+    return { left: r.left, right: r.right, width: r.width, height: r.height, top: r.top + p._drift, bottom: r.bottom + p._drift };
+  }
+  function onScreen(el) { var r = rect(el), c = clip(el); return r.bottom > c.top + 8 && r.top < c.bottom - 8; }
   // The part of el that can be seen (a card half under a panel edge counts only by its visible half).
   function seen(el) {
-    var r = el.getBoundingClientRect(), c = clip(el), top = Math.max(r.top, c.top), bottom = Math.min(r.bottom, c.bottom);
+    var r = rect(el), c = clip(el), top = Math.max(r.top, c.top), bottom = Math.min(r.bottom, c.bottom);
     return { left: r.left, right: r.right, width: r.width, top: top, bottom: bottom, height: Math.max(0, bottom - top) };
   }
 
@@ -92,6 +105,7 @@ var Focus = (function () {
     var all = [].slice.call(root().querySelectorAll('.f')).filter(usable);
     if (!all.length) return;
     if (!cur || all.indexOf(cur) < 0) return set(all[0]);
+    gen++;
     // After the pointer wheel scrolled the focused item out of sight, carry on from what is on screen.
     var sc = cur.closest('.vs');
     if (sc && !onScreen(cur)) {
@@ -105,7 +119,7 @@ var Focus = (function () {
       // Items scrolled out of sight count only inside the list you are in (moving there scrolls them in);
       // elsewhere they are hidden behind a panel edge and focusing them would look like focus vanished.
       if (!mine && !onScreen(el)) return;
-      var s = score(dir, c, mine && !onScreen(el) ? el.getBoundingClientRect() : seen(el));
+      var s = score(dir, c, mine && !onScreen(el) ? rect(el) : seen(el));
       if (s < 0) return;
       if (s < bs) { bs = s; best = el; }
       if (mine && s < ibs) { ibs = s; inBest = el; }
