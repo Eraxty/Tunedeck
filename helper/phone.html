@@ -23,20 +23,21 @@ input[type=file]{display:none}
 </style></head>
 <body>
 <h1>TuneDeck</h1>
-<p>You’re connected to your TV. Keep this phone on the same Wi‑Fi as the TV.</p>
+<p>You’re connected to your TV. Keep this phone on the same Wi-Fi as the TV.</p>
 
 <div id="signin" class="hide">
   <h2>Sign in with Spotify</h2>
-  <div class="card">
-    <p><b>Did the TV’s owner add your Spotify email to their TuneDeck?</b> Then just log in:</p>
+  <div class="card" id="ready">
+    <p><b>Your Spotify key is on the TV</b> (<code id="keyshort"></code>). Log in:</p>
     <a class="btn" href="/login">Log in with Spotify</a>
-    <p class="note">Spotify only lets each TuneDeck key be used by 5 accounts. Everyone else sets up their own free key once below. It takes about 3 minutes and needs Spotify Premium.</p>
-    <button class="btn alt" id="showSetup">Set up my own key</button>
+    <p class="note">When your phone warns the connection isn’t private, tap <b>Advanced</b>, then <b>Continue</b>: that’s your TV’s own certificate.</p>
+    <button class="btn alt" id="showSetup">Use a different key</button>
   </div>
 </div>
 
 <div id="setup" class="hide">
-  <h2>Set up your own Spotify key</h2>
+  <h2>Set up your Spotify key</h2>
+  <p class="note">One time, about 3 minutes, needs Spotify Premium. Spotify only allows apps like TuneDeck to sign in with a key you create yourself.</p>
   <div class="card">
     <ol>
       <li>Open the Spotify developer dashboard and log in with <b>your</b> Spotify account. Accept the terms if it asks.
@@ -49,7 +50,7 @@ input[type=file]{display:none}
         <input type="text" id="cid" placeholder="32 letters and numbers" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button class="btn" id="sendCid">Send to TV</button>
         <div class="status" id="cidStatus"></div></li>
-      <li>Then log in. When your phone warns the connection isn’t private, tap <b>Advanced → Continue</b>: that’s your TV’s own certificate.
+      <li>Then log in. When your phone warns the connection isn’t private, tap <b>Advanced</b>, then <b>Continue</b>: that’s your TV’s own certificate.
         <a class="btn" id="loginOwn" href="/login" aria-disabled="true">Log in with Spotify</a></li>
     </ol>
     <p class="note">Only the Client ID goes to the TV. Never paste the Client secret anywhere.</p>
@@ -67,8 +68,10 @@ input[type=file]{display:none}
 var $ = function (id) { return document.getElementById(id); };
 fetch('/api/info').then(function (r) { return r.json(); }).then(function (i) { $('cb').textContent = i.callback; });
 fetch('/api/login/status').then(function (r) { return r.json(); }).then(function (s) {
-  if (s.pending) $('signin').classList.remove('hide');
-  else { $('signin').classList.remove('hide'); $('signin').querySelector('.card').insertAdjacentHTML('afterbegin', '<p class="err">Start “Sign in with Spotify” on the TV first, then come back here.</p>'); }
+  $('signin').classList.remove('hide');
+  if (!s.pending) { $('ready').innerHTML = '<p class="err">Open “Sign in with Spotify” on the TV first, then scan the code again.</p>'; return; }
+  if (s.clientId) { $('keyshort').textContent = s.clientId.slice(0, 6) + '…'; }
+  else { $('signin').classList.add('hide'); $('setup').classList.remove('hide'); }
 });
 $('showSetup').onclick = function () { $('setup').classList.remove('hide'); $('setup').scrollIntoView({ behavior: 'smooth' }); };
 document.addEventListener('click', function (e) {

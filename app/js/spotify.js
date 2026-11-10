@@ -20,9 +20,9 @@ var Spotify = (function () {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }, function () { throw fail('Cannot reach Spotify', 'network'); });
   }
 
-  // The Spotify app key (Client ID) this profile signs in with: the built-in one, or the person's own key
-  // (Spotify allows only 5 accounts per key for apps not run by a company, so others bring their own).
-  function clientId() { var a = auth(); return (a && a.clientId) || Store.get('clientId', null) || CFG.clientId; }
+  // The Spotify app key (Client ID) this profile signs in with. Everyone brings their own (Spotify allows only
+  // 5 accounts per key for apps not run by a company); the phone page sends it to the TV during sign-in.
+  function clientId() { var a = auth(); return (a && a.clientId) || Store.get('clientId', null); }
 
   // Starts a login; resolves with { phoneUrl } to show as a QR code. onDone(err) fires when it finishes.
   // The phone page can send a different key mid-login; the login then restarts with that key.
@@ -31,11 +31,12 @@ var Spotify = (function () {
     return helper('/api/info').then(function (info) {
       var verifier, cid;
       function register() {
-        cid = Store.get('clientId', null) || CFG.clientId;
+        cid = Store.get('clientId', null);
         verifier = b64url(randomBytes(48));
         var state = b64url(randomBytes(16)), challenge = b64url(sha256(new TextEncoder().encode(verifier)));
-        var url = CFG.spotifyAuth + '/authorize?' + form({ client_id: cid, response_type: 'code', redirect_uri: info.callback,
-          scope: CFG.spotifyScopes, state: state, code_challenge_method: 'S256', code_challenge: challenge });
+        // Without a key yet, the phone shows the key setup first; the login URL is made once the key arrives.
+        var url = cid ? CFG.spotifyAuth + '/authorize?' + form({ client_id: cid, response_type: 'code', redirect_uri: info.callback,
+          scope: CFG.spotifyScopes, state: state, code_challenge_method: 'S256', code_challenge: challenge }) : null;
         return helper('/api/login', { method: 'POST', body: JSON.stringify({ url: url, state: state, clientId: cid }) });
       }
       return register().then(function () {
@@ -101,7 +102,7 @@ var Spotify = (function () {
       }
       return r.json().catch(function () { return {}; }).then(function (j) {
         var msg = (j.error && j.error.message) || ('Spotify error ' + r.status);
-        if (r.status === 403 && /not registered|user may not be registered|developer/i.test(msg)) msg = 'This Spotify account isn’t on the app’s allowed users list (Spotify developer dashboard → Users and Access).';
+        if (r.status === 403 && /not registered|user may not be registered|developer/i.test(msg)) msg = 'This Spotify account isn’t on the app’s allowed users list (Spotify developer dashboard, Users and Access).';
         throw fail(msg, r.status);
       });
     });
@@ -126,7 +127,7 @@ var Spotify = (function () {
 
   return {
     linked: function () { return !!auth(); }, linkedAt: function () { var a = auth(); return a && a.linkedAt; },
-    token: token, call: call, me: me, clientId: clientId, ownKey: function () { return clientId() !== CFG.clientId; },
+    token: token, call: call, me: me, clientId: clientId,
     forgetKey: function () { Store.set('clientId', null); }, cachedMe: function () { return Store.get('spotifyMe', null); },
     unlink: function () { Store.set('spotify', null); Store.set('spotifyMe', null); access = null; meP = null; },
     startLogin: startLogin, stopLogin: stopLogin, get: get, getAll: getAll,

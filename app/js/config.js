@@ -6,7 +6,6 @@ var CFG = {
   audius: 'https://api.audius.co/v1',
   lrclib: 'https://lrclib.net/api',
   helper: 'http://127.0.0.1:8899',
-  clientId: 'b39c9fa581f4448f80fed22715ae2b55',
   spotifyApi: 'https://api.spotify.com/v1',
   spotifyAuth: 'https://accounts.spotify.com',
   // Playback (Web Playback SDK) + reading and saving the user's library. Nothing that edits playlists.

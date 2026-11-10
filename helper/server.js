@@ -103,14 +103,14 @@ function api(req, res, u) {
   if (u.pathname === '/api/info') return send(res, 200, { ip: lanIp(), phoneUrl: 'http://' + lanIp() + ':8899/', callback: 'https://' + lanIp() + ':8900/callback' });
   if (u.pathname === '/api/upload' && req.method === 'POST') return handleUpload(req, res, q);
   // Phone: is a Spotify login waiting on the TV, and with which app key?
-  if (u.pathname === '/api/login/status') return send(res, 200, { pending: !!(pending.login && pending.login.url), clientId: pending.login ? pending.login.clientId || null : null });
+  if (u.pathname === '/api/login/status') return send(res, 200, { pending: !!pending.login, clientId: pending.login ? pending.login.clientId || null : null });
   // Phone: hand the TV the person's own Spotify app key (Client ID); the TV restarts its login with it.
   if (u.pathname === '/api/clientid' && req.method === 'POST') {
     return readBody(req, function (err, buf) {
       var id = '';
       try { id = String(JSON.parse(buf.toString('utf8')).clientId || '').trim(); } catch (e) {}
       if (!/^[0-9a-f]{32}$/i.test(id)) return send(res, 400, { error: 'That doesn’t look like a Client ID. It is 32 letters and numbers.' });
-      if (!pending.login) return send(res, 409, { error: 'Start “Sign in with Spotify” on the TV first.' });
+      if (!pending.login) return send(res, 409, { error: 'Open “Sign in with Spotify” on the TV first.' });
       pending.clientIdUpdate = id.toLowerCase();
       send(res, 200, { ok: true });
     });
@@ -151,7 +151,8 @@ function api(req, res, u) {
 function phone(req, res, u) {
   if (u.pathname === '/') return send(res, 200, fs.readFileSync(path.join(DIR, 'phone.html')), 'text/html; charset=utf-8');
   if (u.pathname === '/login') {
-    if (!pending.login || !pending.login.url) return send(res, 200, page('No login waiting', 'Open <b>Settings → Spotify</b> on the TV and choose <b>Connect Spotify</b> first.'), 'text/html; charset=utf-8');
+    if (!pending.login) return send(res, 200, page('Nothing to sign in yet', 'On the TV, open <b>Settings</b> and choose <b>Sign in with Spotify</b> first.'), 'text/html; charset=utf-8');
+    if (!pending.login.url) { res.writeHead(302, { Location: '/' }); return res.end(); }
     res.writeHead(302, { Location: pending.login.url }); return res.end();
   }
   send(res, 404, 'not found', 'text/plain');

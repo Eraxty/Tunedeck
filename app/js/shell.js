@@ -273,7 +273,7 @@ var UI = (function () {
     ctlBtn(parent, 'repeat', cycleRepeat, 'c-repeat', s);
   }
   function seekRow(parent) {
-    var r = h('div', 'seek', '<span class="cur">0:00</span><button class="seekbar f"><span class="sbar"><span class="sfill"></span></span><span class="shint">◀ ▶ 10s</span></button><span class="dur">0:00</span>');
+    var r = h('div', 'seek', '<span class="cur">0:00</span><button class="seekbar f"><span class="sbar"><span class="sfill"></span></span><span class="shint">Left / right: 10s</span></button><span class="dur">0:00</span>');
     parent.appendChild(r); seekKeys($('.seekbar', r)); return r;
   }
   function buildBar() {
@@ -410,7 +410,7 @@ var UI = (function () {
   function renderMiniLyrics() {
     var mini = $('.lyr-mini', els.npv); if (!mini) return;
     var r = lyr.result;
-    mini.innerHTML = !Playback.state.track ? '' : !r ? '<p class="lm-msg">Looking for lyrics…</p>' : r.synced ? '<div class="lm prev"></div><div class="lm cur">♪</div><div class="lm nxt"></div>' :
+    mini.innerHTML = !Playback.state.track ? '' : !r ? '<p class="lm-msg">Looking for lyrics…</p>' : r.synced ? '<div class="lm prev"></div><div class="lm cur">• • •</div><div class="lm nxt"></div>' :
       '<p class="lm-msg">' + (r.plain ? 'Lyrics aren’t synced for this song. Open to read them.' : 'No lyrics found for this song.') + '</p>';
     lyr.idx = -2;
   }
@@ -422,7 +422,7 @@ var UI = (function () {
     var mini = $('.lyr-mini', els.npv);
     if (mini && $('.cur', mini)) {
       $('.prev', mini).textContent = i > 0 ? lyr.lines[i - 1].text : '';
-      $('.cur', mini).textContent = i >= 0 ? (lyr.lines[i].text || '♪') : '♪';
+      $('.cur', mini).textContent = i >= 0 ? (lyr.lines[i].text || '• • •') : '• • •';
       $('.nxt', mini).textContent = lyr.lines[i + 1] ? lyr.lines[i + 1].text : '';
     }
     var box = els.player && $('.pl-lines', els.player);
@@ -495,7 +495,7 @@ var UI = (function () {
     P.classList.remove('lyr-none', 'lyr-plain', 'lyr-loading');
     box.innerHTML = ''; empty.innerHTML = ''; box.style.transform = '';
     if (!r) { P.classList.add('lyr-loading'); box.innerHTML = '<div class="ln sk"></div><div class="ln sk s2"></div><div class="ln sk s3"></div>'; return; }
-    if (r.synced) { box.innerHTML = r.lines.map(function (l) { return '<div class="ln">' + esc(l.text || '♪') + '</div>'; }).join(''); lyr.idx = -2; return; }
+    if (r.synced) { box.innerHTML = r.lines.map(function (l) { return '<div class="ln' + (l.text ? '' : ' gap') + '">' + esc(l.text || '• • •') + '</div>'; }).join(''); lyr.idx = -2; return; }
     if (r.plain) {
       P.classList.add('lyr-plain');
       box.innerHTML = '<div class="plain">' + esc(r.plain).replace(/\n/g, '<br>') + '</div>';

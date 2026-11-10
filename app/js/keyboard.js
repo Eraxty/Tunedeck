@@ -13,7 +13,7 @@ var Keyboard = (function () {
     ROWS.forEach(function (r) {
       html += '<div class="kbd-row">' + r.map(function (k) { return '<button class="key f" data-k="' + k + '">' + k + '</button>'; }).join('') + '</div>';
     });
-    html += '<div class="kbd-row"><button class="key wide f" data-k=" ">space</button><button class="key f" data-k="del">⌫</button>' +
+    html += '<div class="kbd-row"><button class="key wide f" data-k=" ">space</button><button class="key f" data-k="del">' + Icon('backspace', 30) + '</button>' +
       '<button class="key f" data-k="clear">clear</button></div>';
     if (opts.onDone) html += '<div class="kbd-row"><button class="key done f" data-k="done">' + (opts.doneLabel || 'Done') + '</button></div>';
     el.innerHTML = html;

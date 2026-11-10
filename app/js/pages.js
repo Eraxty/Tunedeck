@@ -16,10 +16,10 @@ var Account = (function () {
     }).then(function (info) {
       d = UI.dialog('Sign in with Spotify',
         '<div class="signin">' + UI.qr(info.phoneUrl, 320) + '<div class="si-steps">' +
-        '<div class="step"><b>1</b><span>Put your phone on the <b>same Wi‑Fi as this TV</b> and scan the code</span></div>' +
-        '<div class="step"><b>2</b><span>If the TV’s owner added your Spotify email, tap <i>Log in with Spotify</i>. Otherwise tap <i>Set up my own key</i>: a 3-minute guide (needs Premium)</span></div>' +
-        '<div class="step"><b>3</b><span>When your phone says the connection isn’t private, tap <i>Advanced → Continue</i>: it’s this TV’s own certificate</span></div>' +
-        '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> on any computer on the same Wi‑Fi.</p>' +
+        '<div class="step"><b>1</b><span>Put your phone on the <b>same Wi-Fi as this TV</b> and scan the code</span></div>' +
+        '<div class="step"><b>2</b><span>' + (Store.get('clientId', null) ? 'Your Spotify key is saved on this TV: tap <i>Log in with Spotify</i>' : 'Follow the 3-minute setup on your phone to create your Spotify key (needs Premium)') + '</span></div>' +
+        '<div class="step"><b>3</b><span>When your phone says the connection isn’t private, tap <i>Advanced</i>, then <i>Continue</i>: it’s this TV’s own certificate</span></div>' +
+        '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> on any computer on the same Wi-Fi.</p>' +
         '<p class="dim small">Waiting for you to log in…</p></div></div>',
         [{ label: 'Cancel', onClick: function () { Spotify.stopLogin(); if (done) done(new Error('cancelled')); } }]);
     }, function (e) { UI.toast(e.message); if (done) done(e); });
@@ -67,7 +67,7 @@ var Account = (function () {
       if (!list.length) return grid.appendChild(h('p', 'dim pad', 'Nothing found. GitHub may be limiting requests; try again in a minute.'));
       list.slice(0, 60).forEach(function (m) {
         var c = h('button', 'mcard f' + (Ext.installed(m) ? ' is-installed' : ''), '<div class="mprev"' + UI.bg(m.preview) + '></div><div class="mbody"><div class="t">' + esc(m.name) + '</div>' +
-          '<div class="s">' + esc(m.owner) + (m.stars ? ' · ★ ' + UI.count(m.stars) : '') + '</div><div class="md">' + esc((m.desc || '').slice(0, 96)) + '</div></div>');
+          '<div class="s">' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</div><div class="md">' + esc((m.desc || '').slice(0, 96)) + '</div></div>');
         c.onclick = function () { (tab === 'themes' ? themeDetail : extDetail)(m); };
         grid.appendChild(c);
       });
@@ -77,7 +77,7 @@ var Account = (function () {
 
   function themeDetail(m) {
     var d = UI.layer('dialog-layer', '<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + UI.bg(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
-      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ★ ' + UI.count(m.stars) : '') + '</p><p>' + esc(m.desc || '') + '</p></div></div>' +
+      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p></div></div>' +
       '<h3 class="sch-h">Colour schemes</h3><div class="schemes"><p class="dim">Downloading…</p></div><div class="dbtns"><button class="pill f close-d">Close</button></div></div>');
     d.el.querySelector('.close-d').onclick = d.close;
     var box = d.el.querySelector('.schemes');
@@ -99,12 +99,12 @@ var Account = (function () {
 
   function extDetail(m) {
     var d = UI.layer('dialog-layer', '<div class="dialog xwide"><div class="mdetail"><div class="mbig"' + UI.bg(m.preview) + '></div><div class="mtext"><h2>' + esc(m.name) + '</h2>' +
-      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ★ ' + UI.count(m.stars) : '') + '</p><p>' + esc(m.desc || '') + '</p><p class="compat dim">Checking whether it runs on this TV…</p></div></div>' +
+      '<p class="dim">by ' + esc(m.owner) + (m.stars ? ' · ' + UI.count(m.stars) + ' stars' : '') + '</p><p>' + esc(m.desc || '') + '</p><p class="compat dim">Checking whether it runs on this TV…</p></div></div>' +
       '<div class="dbtns"><button class="pill primary f inst" disabled>Install</button><button class="pill f close-d">Close</button></div></div>');
     d.el.querySelector('.close-d').onclick = d.close;
     var inst = d.el.querySelector('.inst'), compat = d.el.querySelector('.compat');
     Ext.checkExtension(m).then(function (ok) {
-      compat.innerHTML = ok ? '<span class="ok">✓ Compatible with this TV.</span> Extensions written for Spotify desktop may only partly work here.' : '<span class="bad">✕ Needs a newer browser engine than this TV has.</span> It can be installed but stays off.';
+      compat.innerHTML = ok ? '<span class="ok">Compatible with this TV.</span> Extensions written for Spotify desktop may only partly work here.' : '<span class="bad">Needs a newer browser engine than this TV has.</span> It can be installed but stays off.';
       inst.disabled = false; inst.textContent = ok ? 'Install' : 'Install anyway';
       inst.onclick = function () { Ext.installExtension(m).then(function (on) { d.close(); UI.toast(on ? m.name + ' installed and running' : m.name + ' installed (off: not compatible)'); UI.refresh(); }, function (e) { UI.toast(e.message); }); };
     }, function (e) { compat.textContent = e.message; });
@@ -147,7 +147,7 @@ var Account = (function () {
       if (Spotify.linked()) {
         var me = Spotify.cachedMe() || { name: 'your account' }, st = Playback.spotify();
         row(s, 'user', 'Signed in as ' + me.name, 'Your playlists, Liked Songs and library sync live with Spotify', null);
-        row(s, 'link', Spotify.ownKey() ? 'Using your own Spotify key' : 'Using this TV’s Spotify key', Spotify.ownKey() ? 'Key ' + Spotify.clientId().slice(0, 6) + '…' : 'Shared by up to 5 accounts the owner allows', null);
+        row(s, 'link', 'Your Spotify key', 'Client ID ' + (Spotify.clientId() || '').slice(0, 6) + '…, saved on this TV for this profile', null);
         row(s, 'music', 'Spotify player on this TV', st.status === 'ready' ? 'Ready · shows up as “' + CFG.deviceName + '” in Spotify Connect' : st.status === 'error' ? st.error : st.status === 'loading' ? 'Starting…' : 'Starts when you play something', function () { Playback.initSpotify().then(function () { UI.toast('Spotify player ready'); UI.refresh(); }, function (e) { UI.toast(e.message); }); });
         row(s, 'close', 'Sign out of Spotify', 'This profile goes back to free Audius music', function () { Spotify.unlink(); Spotify.forgetKey(); Cat.clear(); Profiles.linkSpotify(null); UI.toast('Signed out'); location.reload(); });
       } else {
@@ -176,7 +176,7 @@ var Account = (function () {
       function paint() {
         var o = Lyrics.globalOffset();
         g.querySelector('.t').textContent = 'Lyrics delay for this TV: ' + (o === 0 ? 'none' : (Math.abs(o) / 1000).toFixed(1) + 's ' + (o > 0 ? 'earlier' : 'later'));
-        g.querySelector('.s').textContent = '◀ ▶ to adjust in 0.1s steps. Use it if lyrics are always off, e.g. with a soundbar. Songs can be fine-tuned in the player (Earlier / Later, or the red and green buttons).';
+        g.querySelector('.s').textContent = 'Press left or right to adjust in 0.1s steps. Use it if lyrics are always off, e.g. with a soundbar. Songs can be fine-tuned in the player (Earlier / Later, or the red and green buttons).';
       }
       g._key = function (k) { if (k !== 'left' && k !== 'right') return false; Lyrics.setGlobal(Lyrics.globalOffset() + (k === 'left' ? -100 : 100)); paint(); return true; };
       paint();

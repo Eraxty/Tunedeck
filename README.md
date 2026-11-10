@@ -25,39 +25,24 @@ and imports). Nothing touches the TV's firmware.
 
 ## Signing in with Spotify
 
-Spotify lets an app made by an individual (not a company) be used by **at most 5 Spotify accounts**,
-and each one has to be allowed by the app's owner. So there are two ways in:
-
-### A. The TV owner added you (fast)
+Spotify only lets an app made by an individual sign in with a key ("Client ID") that the listener creates
+themselves, so each person sets up their own key once. It takes about 3 minutes and needs Spotify Premium.
 
 1. On the TV: **Settings → Sign in with Spotify** (or **Add profile → Sign in with Spotify**).
-2. Put your phone on the **same Wi‑Fi as the TV** and scan the QR code.
-3. Tap **Log in with Spotify**.
-4. Your phone warns that the connection isn't private: tap **Advanced → Continue**. That's the TV's own
-   certificate, used only to finish the sign-in.
-5. Log in to Spotify and tap **Agree**. The TV signs in by itself.
-
-### B. Use your own Spotify key (about 3 minutes, once)
-
-For anyone the owner hasn't added. You need Spotify Premium.
-
-1. Start **Sign in with Spotify** on the TV and scan the QR code (same Wi‑Fi as the TV).
-2. On the phone, tap **Set up my own key** and follow the steps:
+2. Put your phone on the **same Wi-Fi as the TV** and scan the QR code.
+3. The phone walks you through it:
    1. Open the Spotify developer dashboard and log in with *your* Spotify account.
    2. Create an app called **TuneDeck**.
    3. Add the **Redirect URI** shown on the phone page (copy button), e.g. `https://192.168.1.3:8900/callback`.
    4. Tick **Web API** and **Web Playback SDK**, agree and **Save**.
    5. Copy your app's **Client ID** into the phone page and tap **Send to TV**.
-   6. Tap **Log in with Spotify** and finish as in A, steps 4–5.
+4. Tap **Log in with Spotify**. Your phone warns that the connection isn't private: tap **Advanced**, then
+   **Continue**. That's the TV's own certificate, used only to finish the sign-in.
+5. Log in to Spotify and tap **Agree**. The TV signs in by itself.
 
-Only the Client ID goes to the TV. Never share your Client secret.
-
-### For the TV owner
-
-1. In your Spotify developer app, add `https://<tv-ip>:8900/callback` under **Redirect URIs** and save.
-2. Add the Spotify email of each person who should use your key under **Users and Access** (up to 5
-   accounts, including yours).
-3. Reserve the TV's IP address in your router, so the redirect address keeps working.
+The TV remembers your key for your profile, so signing in again later skips straight to step 4. Only the
+Client ID goes to the TV; never share your Client secret. Reserve the TV's IP address in your router so the
+redirect address keeps working.
 
 ## Using it
 
@@ -77,12 +62,13 @@ for example with a soundbar.
 
 ## Troubleshooting
 
-- **"Site can't be reached" on the phone**: the phone isn't on the TV's Wi‑Fi (mobile data or a guest
-  network), or the router isolates devices. Use a computer on the same Wi‑Fi instead.
+- **"Site can't be reached" on the phone**: the phone isn't on the TV's Wi-Fi (mobile data or a guest
+  network), or the router isolates devices. Use a computer on the same Wi-Fi instead.
 - **"INVALID_CLIENT: Invalid redirect URI" / "redirect_uri not matching configuration"**: the Redirect URI
   isn't saved in the Spotify app being used. Add it exactly as shown and press Save.
-- **"This Spotify account isn't on the app's allowed users list"**: ask the owner to add your email, or use
-  your own key (B).
+- **"This Spotify account isn't on the app's allowed users list"**: you're logging in with a different
+  Spotify account than the one that created the key. Use the same account, or add the other account under
+  **Users and Access** in the dashboard.
 - **Logs**: the app writes to `/tmp/tunedeck-app.log` on the TV (`ssh root@<tv-ip> cat /tmp/tunedeck-app.log`).
 
 ## Limits from Spotify (developer apps, 2026)
