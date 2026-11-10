@@ -5,7 +5,10 @@
 'use strict';
 var http = require('http'), https = require('https'), fs = require('fs'), os = require('os'), zlib = require('zlib'), url = require('url'), path = require('path');
 
-var DIR = __dirname, DATA = path.join(DIR, 'data');
+// Code lives in the app folder (replaced on every update); the certificate and pending imports live in the
+// state folder that setup.sh makes (/var/lib/webosbrew/tunedeck).
+var DIR = __dirname, STATE = process.env.TUNEDECK_STATE || DIR, DATA = path.join(STATE, 'data');
+var VERSION = (function () { try { return JSON.parse(fs.readFileSync(path.join(DIR, '..', 'appinfo.json'), 'utf8')).version; } catch (e) { return '?'; } })();
 if (!fs.existsSync(DATA)) fs.mkdirSync(DATA);
 var MAX_UPLOAD = 200 * 1024 * 1024;
 
@@ -100,7 +103,7 @@ function handleUpload(req, res, q) {
 
 function api(req, res, u) {
   var q = u.query;
-  if (u.pathname === '/api/info') return send(res, 200, { ip: lanIp(), phoneUrl: 'http://' + lanIp() + ':8899/', callback: 'https://' + lanIp() + ':8900/callback' });
+  if (u.pathname === '/api/info') return send(res, 200, { version: VERSION, ip: lanIp(), phoneUrl: 'http://' + lanIp() + ':8899/', callback: 'https://' + lanIp() + ':8900/callback' });
   if (u.pathname === '/api/upload' && req.method === 'POST') return handleUpload(req, res, q);
   // Phone: is a Spotify login waiting on the TV, and with which app key?
   if (u.pathname === '/api/login/status') return send(res, 200, { pending: !!pending.login, clientId: pending.login ? pending.login.clientId || null : null });
@@ -169,7 +172,7 @@ http.createServer(function (req, res) {
   phone(req, res, u);
 }).listen(8899, '0.0.0.0');
 
-var keyFile = path.join(DIR, 'key.pem'), certFile = path.join(DIR, 'cert.pem');
+var keyFile = path.join(STATE, 'key.pem'), certFile = path.join(STATE, 'cert.pem');
 if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
   https.createServer({ key: fs.readFileSync(keyFile), cert: fs.readFileSync(certFile) }, function (req, res) {
     var u = url.parse(req.url, true);

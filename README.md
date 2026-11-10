@@ -12,16 +12,27 @@ synced lyrics, profiles and a marketplace for themes and extensions.
 
 TuneDeck is free and non-commercial. Spotify's terms don't allow commercial use of its player.
 
-## Install (once, on the computer)
+## Install
 
-Needs a rooted LG TV with SSH, and `ares-cli` on the computer.
+**From the Homebrew Channel** (rooted LG TV): open the Homebrew Channel, find **TuneDeck** under
+Multimedia and install it. On first launch TuneDeck asks the Homebrew Channel to set up its helper, a
+small server on the TV for the phone sign-in page, the Spotify login relay and playlist imports. The
+helper:
+
+- runs from the app's own folder;
+- keeps its certificate and pending imports in `/var/lib/webosbrew/tunedeck`;
+- starts at boot through a link in `/var/lib/webosbrew/init.d` (removing the app leaves a dead link that is
+  skipped);
+- never touches system partitions or the firmware.
+
+Root is optional: without it, free music works but Spotify sign-in doesn't.
+
+**For development** (root SSH and `ares-cli` on the computer):
 
 ```bash
-TV_HOST=root@<tv-ip> ./scripts/deploy.sh
+TV_HOST=root@<tv-ip> ./scripts/deploy.sh   # build, install, set up the helper (does not launch the app)
+./scripts/release.sh                       # dist/: the ipk and its Homebrew Channel manifest
 ```
-
-This installs the app and a small helper that runs on the TV (it serves the phone page used for sign-in
-and imports). Nothing touches the TV's firmware.
 
 ## Signing in with Spotify
 

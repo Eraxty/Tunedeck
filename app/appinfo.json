@@ -1,6 +1,6 @@
 {
   "id": "com.ice.tunedeck",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "vendor": "ice",
   "type": "web",
   "main": "index.html",

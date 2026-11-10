@@ -1,3 +1,5 @@
+// The helper is checked (and set up through the Homebrew Channel if needed) in the background.
+Helper.ensure().catch(function () {});
 Library.load();
 Profiles.start(function () {
   Log.add('profile', Profiles.current().name, SpotifyApi.linked() ? 'spotify' : 'audius');

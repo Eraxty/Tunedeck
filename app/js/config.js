@@ -2,7 +2,7 @@
 // and no Object.values/entries or padStart. No CSS grid.
 var CFG = {
   appName: 'tunedeck',
-  version: '0.4.0',
+  version: '0.5.0',
   audius: 'https://api.audius.co/v1',
   lrclib: 'https://lrclib.net/api',
   helper: 'http://127.0.0.1:8899',

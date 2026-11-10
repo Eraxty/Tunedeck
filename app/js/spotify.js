@@ -13,7 +13,7 @@ var SpotifyApi = (function () {
 
   function helper(path, opts) {
     return fetch(CFG.helper + path, opts).then(function (r) { if (!r.ok) throw new Error('helper ' + r.status); return r.json(); },
-      function () { throw fail('The TuneDeck helper is not running on the TV. Reinstall with scripts/deploy.sh.', 'helper'); });
+      function () { throw fail('TuneDeck’s helper isn’t running on this TV. Spotify sign-in needs the Homebrew Channel with root access.', 'helper'); });
   }
 
   function tokenRequest(body) {
@@ -29,7 +29,7 @@ var SpotifyApi = (function () {
   // The phone page can send a different key mid-login; the login then restarts with that key.
   function startLogin(onDone) {
     stopLogin();
-    return helper('/api/info').then(function (info) {
+    return Helper.ensure().then(function (info) {
       var verifier, cid;
       function register() {
         cid = Store.get('clientId', null);
