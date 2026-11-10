@@ -44,6 +44,7 @@ var Focus = (function () {
     if (cur) cur.classList.remove('focus');
     cur = el; el.classList.add('focus');
     var row = el.closest('.hs'); if (row) row._last = el;
+    var reg = el.closest('.region'); if (reg) reg._last = el;
     scrollInto(el);
     if (handlers.focus) handlers.focus(el);
   }
@@ -51,7 +52,9 @@ var Focus = (function () {
   function center(r) { return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
 
   function move(dir) {
-    var all = [].slice.call(root().querySelectorAll('.f')).filter(function (e) { return e.offsetParent !== null && !e.disabled; });
+    // Skip hidden things: display:none (no offsetParent), disabled, and areas marked aria-hidden (e.g. the
+    // Now Playing panel while it is faded out).
+    var all = [].slice.call(root().querySelectorAll('.f')).filter(function (e) { return e.offsetParent !== null && !e.disabled && !e.closest('[aria-hidden="true"]'); });
     if (!all.length) return;
     if (!cur || all.indexOf(cur) < 0) return set(all[0]);
     var c = center(cur.getBoundingClientRect()), best = null, bs = Infinity;
@@ -67,9 +70,13 @@ var Focus = (function () {
       if (score < bs) { bs = score; best = el; }
     });
     if (!best) return;
+    function usable(el) { return el && el.offsetParent && !el.closest('[aria-hidden="true"]') && all.indexOf(el) >= 0; }
+    // Entering another area (library, main view, Now Playing, top bar, player bar) returns to where you were.
+    var reg = best.closest('.region');
+    if (reg && reg !== cur.closest('.region') && usable(reg._last)) { set(reg._last); return; }
     if (dir === 'up' || dir === 'down') {
       var row = best.closest('.hs');
-      if (row && row !== cur.closest('.hs') && row._last && row.contains(row._last) && row._last.offsetParent) best = row._last;
+      if (row && row !== cur.closest('.hs') && usable(row._last)) best = row._last;
     }
     set(best);
   }

@@ -109,6 +109,27 @@ var Playback = (function () {
 
   function isSp() { return state.engine === 'spotify'; }
 
+  // Smooth transitions: the end of a song fades out and the next fades in. A real overlap (like Spotify's
+  // Automix) needs two streams at once, which the Web Playback SDK can't do, so this fades one stream.
+  var baseVol = 0.8, applied = -1, fadeMs = null, trackAt = 0, fadedOut = false;
+  function fadeLength() { if (fadeMs === null) fadeMs = Store.get('fadeMs', 6000); return fadeMs; }
+  function applyVolume(v) {
+    if (Math.abs(v - applied) < 0.02) return;
+    applied = v;
+    if (isSp()) { if (sp.player) sp.player.setVolume(Math.max(0.0001, v)); } else audio.volume = v;
+  }
+  on('track', function () { trackAt = Date.now(); });
+  setInterval(function () {
+    if (!state.track || state.paused) return;
+    var f = fadeLength(), d = duration(), left = d - position(), since = Date.now() - trackAt, v = baseVol;
+    if (f && d > f * 3) {
+      if (left < f && left > 0) { v = baseVol * Math.max(0.05, left / f); fadedOut = true; }
+      else if (fadedOut && since < f) v = baseVol * Math.min(1, 0.05 + since / f);
+      else if (since >= f) fadedOut = false;
+    }
+    applyVolume(v);
+  }, 200);
+
   // ---------------- public ----------------
   // ctx: where playback came from ({ kind, id, uri, name, cover }) for "recently played" and Spotify contexts.
   function play(tracks, start, ctx) {
@@ -152,9 +173,10 @@ var Playback = (function () {
     prev: function () { if (isSp()) { if (position() > 4000) seek(0); else sp.player && sp.player.previousTrack(); } else if (audio.currentTime > 4) seek(0); else auStep(-1, false); },
     skipBy: function (ms) { seek(position() + ms); },
     volume: function (v) {
-      if (v != null) { v = Math.max(0, Math.min(1, v)); audio.volume = v; if (sp.player) sp.player.setVolume(v); emit('volume', v); }
-      return audio.volume;
+      if (v != null) { baseVol = Math.max(0, Math.min(1, v)); applied = -1; applyVolume(baseVol); emit('volume', baseVol); }
+      return baseVol;
     },
+    fade: function (ms) { if (ms != null) { fadeMs = ms; Store.set('fadeMs', ms); } return fadeLength(); },
     setShuffle: function (v) {
       state.shuffle = !!v; emit('state', state);
       if (isSp() && sp.device) SpotifyApi.call('PUT', spDev('/me/player/shuffle?state=' + !!v)).catch(function (e) { Log.add('shuffle', e.message); });

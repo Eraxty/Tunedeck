@@ -95,15 +95,65 @@ var Cat = (function () {
         .then(function (r) { return { artist: r[0], top: r[1], albums: r[2], singles: [], playlists: r[3] }; });
       return SpotifyApi.get('/artists/' + id).then(function (a) {
         var ar = artist(a);
-        // Artist top tracks are gone for dev-mode apps; a search scoped to the artist is the closest substitute.
+        // Artist top tracks are gone for dev-mode apps; search scoped to the artist (most popular first) is the
+        // closest substitute. Search pages hold 10 results, so three pages are read and matched by artist id.
+        var q = encodeURIComponent('artist:"' + a.name + '"');
         return Promise.all([
-          SpotifyApi.get('/search?type=track&limit=10&q=' + encodeURIComponent('artist:"' + a.name + '"')).then(function (s) {
-            return clean(s.tracks.items.map(function (t) { return track(t); })).filter(function (t) { return t.artist_names.indexOf(a.name) >= 0; });
-          }).catch(function () { return []; }),
+          Promise.all([0, 10, 20].map(function (off) {
+            return SpotifyApi.get('/search?type=track&limit=10&offset=' + off + '&q=' + q).then(function (s) { return s.tracks.items; }, function () { return []; });
+          })).then(function (pages) {
+            var seen = {};
+            return clean([].concat.apply([], pages).filter(function (t) {
+              var mine = t && t.artists && t.artists.some(function (x) { return x.id === id; }), key = t && t.name.toLowerCase();
+              if (!mine || seen[key]) return false; seen[key] = 1; return true;
+            }).map(function (t) { return track(t); }));
+          }),
           spAll('/artists/' + id + '/albums?include_groups=album&limit=20', 40, album).catch(function () { return []; }),
           spAll('/artists/' + id + '/albums?include_groups=single&limit=20', 40, album).catch(function () { return []; })
         ]).then(function (r) { return { artist: ar, top: r[0], albums: r[1], singles: r[2], playlists: [] }; });
       });
+    },
+
+    // Every song on an artist's albums and singles (newest first), without duplicate titles.
+    artistSongs: function (id, onProgress) {
+      return this.artist(id).then(function (r) {
+        var releases = r.albums.concat(r.singles).sort(function (a, b) { return b.year.localeCompare(a.year); }).slice(0, 40);
+        var out = [], seen = {}, i = 0;
+        function next() {
+          if (i >= releases.length) return Promise.resolve();
+          var batch = releases.slice(i, i + 3); i += 3;
+          return Promise.all(batch.map(function (al) { return SpotifyApi.get('/albums/' + al.id).catch(function () { return null; }); })).then(function (albums) {
+            albums.forEach(function (a) {
+              if (!a) return;
+              (a.tracks.items || []).forEach(function (t) {
+                var key = t.name.toLowerCase().replace(/\s*[-(].*(remaster|version|edit|mix).*$/i, '');
+                if (seen[key] || !t.artists.some(function (x) { return x.id === id; })) return;
+                seen[key] = 1; var tr = track(t, a); if (tr) out.push(tr);
+              });
+            });
+            if (onProgress) onProgress(out.length, Math.min(i, releases.length), releases.length);
+            return next();
+          });
+        }
+        return next().then(function () { return { artist: r.artist, tracks: out }; });
+      });
+    },
+
+    // Just the artist (one request, cached): what the Now Playing panel needs on every song change.
+    artistInfo: function (id) {
+      if (!isSp()) return Sources.artist(id);
+      return memo('artist:' + id, 3600000, function () { return SpotifyApi.get('/artists/' + id).then(artist); });
+    },
+    // Which of these songs are liked, asked in small batches; updates the local set used for heart icons.
+    checkLikedMany: function (tracks) {
+      if (!isSp()) return Promise.resolve();
+      var uris = tracks.filter(function (t) { return t && t.src && t.src.source === 'spotify'; }).map(function (t) { return t.uri; }), chunks = [];
+      for (var i = 0; i < uris.length; i += 20) chunks.push(uris.slice(i, i + 20));
+      return Promise.all(chunks.map(function (c) {
+        return SpotifyApi.get('/me/library/contains?uris=' + encodeURIComponent(c.join(','))).then(function (r) {
+          if (Array.isArray(r)) c.forEach(function (u, n) { if (r[n]) likedSet[u] = 1; else delete likedSet[u]; });
+        }, function () {});
+      }));
     },
 
     // ---------- library ----------

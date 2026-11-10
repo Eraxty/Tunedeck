@@ -465,3 +465,16 @@ h3{font-size:26px;font-weight:700}
 .no-cover.no-lyrics .pl-title{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .key[data-k=del] .ic{margin:0 auto}
 .ln.gap{letter-spacing:6px}
+
+/* player: Info switch, true centring when cover and lyrics are both off, slow album-art motion */
+.no-info .pl-meta,.no-info .pl-now{display:none!important}
+.no-cover.no-lyrics .pl-body{justify-content:center}
+.no-cover.no-lyrics .pl-left{width:100%;max-width:1500px;margin:0 auto;align-items:center;justify-content:center;text-align:center}
+.no-cover.no-lyrics .pl-meta{width:100%;text-align:center}
+.no-cover.no-lyrics .pl-title,.no-cover.no-lyrics .pl-artist{text-align:center}
+@keyframes drift{0%{transform:scale(1.04) translate3d(0,0,0)}50%{transform:scale(1.16) translate3d(-3%,2%,0)}100%{transform:scale(1.08) translate3d(2%,-2%,0)}}
+.pl-bg{animation:drift 36s ease-in-out infinite alternate;will-change:transform}
+.pl-art{transition:transform .6s var(--ease)}
+.player:not(.no-lyrics) .pl-art{transform:none}
+.all-songs{margin-top:20px}
+@media (prefers-reduced-motion:reduce){.pl-bg{animation:none}}

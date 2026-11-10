@@ -94,7 +94,7 @@ var SpotifyApi = (function () {
       return fetch(path.indexOf('https://') === 0 ? path : CFG.spotifyApi + path, opts);
     }).then(function (r) {
       if (r.status === 204 || r.status === 202) return null;
-      if (r.ok) return r.text().then(function (t) { return t ? JSON.parse(t) : null; });
+      if (r.ok) return r.text().then(function (t) { if (!t) return null; try { return JSON.parse(t); } catch (e) { return t; } });
       if (r.status === 401 && attempt < 1) { access = null; return call(method, path, body, attempt + 1); }
       if (r.status === 429 && attempt < 3) {
         var ra = parseInt(r.headers.get('Retry-After'), 10), ms = ra > 0 ? ra * 1000 : 1000 * Math.pow(2, attempt);

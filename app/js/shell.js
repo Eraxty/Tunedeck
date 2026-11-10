@@ -81,9 +81,10 @@ var UI = (function () {
     list.innerHTML = '<div class="th"><span class="i">#</span><span class="n">Title</span><span class="al">' + (opts.albumCol || 'Album') + '</span><span class="len">' + Icon('clock', 22) + '</span></div>';
     parent.appendChild(list);
     function more() {
-      var end = Math.min(tracks.length, shown + PAGE);
+      var end = Math.min(tracks.length, shown + PAGE), page = tracks.slice(shown, end);
       for (var i = shown; i < end; i++) list.appendChild(row(tracks[i], i, end));
       shown = end; lazy(list); markPlaying();
+      if (!opts.noLike) Cat.checkLikedMany(page).then(function () { page.forEach(function (t) { if (t._paint) t._paint(Cat.isLiked(t)); }); });
     }
     function row(t, i, end) {
       var r = h('div', 'trow' + (t.missing ? ' missing' : ''));
@@ -98,7 +99,7 @@ var UI = (function () {
       if (t.src && !opts.noLike) {
         var like = h('button', 'ico-btn f like-' + i), add = h('button', 'ico-btn f', Icon('plus', 26));
         function paint(on) { like.classList.toggle('on', on); like.innerHTML = Icon(on ? 'heartFill' : 'heart', 26); }
-        paint(Cat.isLiked(t));
+        paint(Cat.isLiked(t)); t._paint = paint;
         like.onclick = function () {
           var on = !like.classList.contains('on'); paint(on);
           Cat.toggleLike(t).then(function () { toast(on ? 'Added to Liked Songs' : 'Removed from Liked Songs'); syncLikeIcons(); }, function (e) { paint(!on); toast(e.message); });
@@ -144,6 +145,7 @@ var UI = (function () {
     }
     if (current) document.body.classList.remove('page-' + current);
     current = id; document.body.classList.add('page-' + id);
+    if (els.npv) syncNpv();
     $$('.topnav').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-id') === id); });
     var vs = els.view, root = vs.firstElementChild;
     if (root._cleanup) root._cleanup();
@@ -324,7 +326,7 @@ var UI = (function () {
     if (els.player) fillPlayer();
     loadLyrics(t);
     markPlaying();
-    document.body.classList.toggle('npv', !!t && npvOpen);
+    syncNpv();
   }
 
   // Backdrop: the smallest cover scaled up is naturally blurred, so no CSS filter is needed on this GPU.
@@ -356,7 +358,14 @@ var UI = (function () {
   }
 
   // ---------- Now Playing view (right panel) ----------
-  function setNpv(on) { npvOpen = on; document.body.classList.toggle('npv', on && !!Playback.state.track); els.npvBtn.classList.toggle('on', on); }
+  function setNpv(on) { npvOpen = on; syncNpv(); els.npvBtn.classList.toggle('on', on); }
+  // The panel fades out rather than leaving the page, so mark it hidden for the remote too.
+  function syncNpv() {
+    var shown = npvOpen && !!Playback.state.track;
+    document.body.classList.toggle('npv', shown);
+    els.npv.setAttribute('aria-hidden', shown && current !== 'search' ? 'false' : 'true');
+    if (!shown && Focus.current && els.npv.contains(Focus.current)) Focus.first(els.view);
+  }
   function fillNpv(t) {
     var p = els.npv;
     if (!t) { p.innerHTML = ''; return; }
@@ -378,9 +387,8 @@ var UI = (function () {
     $('.lyr-card', p).onclick = function () { openPlayer('lyrics'); };
     $('.about', p).onclick = function () { if (t.artist_id) go('artist', t.artist_id); };
     syncLikeIcons(); fillNext(); renderMiniLyrics();
-    if (t.artist_id) Cat.artist(t.artist_id).then(function (r) {
+    if (t.artist_id) Cat.artistInfo(t.artist_id).then(function (a) {
       if (Playback.state.track !== t) return;
-      var a = r.artist;
       $('.about-body', p).innerHTML = '<div class="about-img"' + bg(a.avatar_big || a.avatar) + '></div><div class="about-name">' + esc(a.name) + '</div>' +
         '<div class="dim small">' + (a.genres && a.genres.length ? esc(a.genres.slice(0, 3).join(' · ')) : a.followers ? count(a.followers) + ' followers' : 'Artist') + '</div>';
       lazy(p);
@@ -437,7 +445,7 @@ var UI = (function () {
   }
 
   // ---------- full-screen player: cover and lyrics, each toggleable ----------
-  function prefs() { var p = Store.get('player', null) || {}; return { cover: p.cover !== false, lyrics: p.lyrics !== false, dark: !!p.dark }; }
+  function prefs() { var p = Store.get('player', null) || {}; return { cover: p.cover !== false, lyrics: p.lyrics !== false, info: p.info !== false, dark: !!p.dark }; }
   function openPlayer(mode) {
     if (!Playback.state.track) return toast('Play something first');
     if (mode === 'lyrics') { var p = prefs(); if (!p.lyrics) { p.lyrics = true; Store.set('player', p); } }
@@ -445,6 +453,7 @@ var UI = (function () {
     var L = layer('full player', '<div class="pl-bg"></div><div class="pl-shade"></div>' +
       '<div class="pl-top"><button class="pill f pl-back">' + Icon('back', 28) + '<span>Back</span></button><div class="pl-from"></div><div class="pl-now"><span class="pn-c"></span><span><b class="pn-t"></b><span class="pn-a"></span></span></div>' +
       '<div class="pl-toggles"><button class="tog f t-cover">' + Icon('image', 26) + '<span>Cover</span></button><button class="tog f t-lyrics">' + Icon('lyrics', 26) + '<span>Lyrics</span></button>' +
+      '<button class="tog f t-info">' + Icon('text', 26) + '<span>Info</span></button>' +
       '<button class="tog f t-dark">' + Icon('moon', 26) + '<span>Dark</span></button>' +
       '<span class="pl-sync"><button class="tog f t-early">Earlier</button><span class="pl-off">0.0s</span><button class="tog f t-late">Later</button></span></div></div>' +
       '<div class="pl-body"><div class="pl-left"><div class="pl-art"></div><div class="pl-meta"><div class="pl-title"></div><div class="pl-artist"></div></div></div>' +
@@ -461,6 +470,7 @@ var UI = (function () {
     $('.t-cover', L.el).onclick = function () { toggle('cover'); };
     $('.t-lyrics', L.el).onclick = function () { toggle('lyrics'); };
     $('.t-dark', L.el).onclick = function () { toggle('dark'); };
+    $('.t-info', L.el).onclick = function () { toggle('info'); };
     // Holding OK on these repeats (the remote sends repeated key presses), for big corrections.
     $('.t-early', L.el).onclick = function () { nudge(100); };
     $('.t-late', L.el).onclick = function () { nudge(-100); };
@@ -474,7 +484,8 @@ var UI = (function () {
   function applyPlayerMode() {
     var P = els.player; if (!P) return;
     var p = prefs();
-    P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics); P.classList.toggle('dark', p.dark);
+    P.classList.toggle('no-cover', !p.cover); P.classList.toggle('no-lyrics', !p.lyrics); P.classList.toggle('dark', p.dark); P.classList.toggle('no-info', !p.info);
+    $('.t-info', P).classList.toggle('on', p.info);
     $('.t-cover', P).classList.toggle('on', p.cover); $('.t-lyrics', P).classList.toggle('on', p.lyrics); $('.t-dark', P).classList.toggle('on', p.dark);
     lyr.idx = -2;
   }
@@ -523,13 +534,14 @@ var UI = (function () {
   }
 
   // ---------- clock ----------
-  var lastSec = -1;
+  // Live collections: no document queries per frame. The bar only moves when it changes by a visible amount.
+  var lastSec = -1, lastF = -1, fills = document.getElementsByClassName('sfill'), curs = document.getElementsByClassName('cur'), durs = document.getElementsByClassName('dur');
   function tick() {
     var t = Playback.state.track;
     if (t) {
-      var p = Playback.position(), d = Playback.duration(), f = d ? Math.min(1, p / d) : 0, sec = Math.floor(p / 1000);
-      if (sec !== lastSec) { lastSec = sec; $$('.seek .cur').forEach(function (e) { e.textContent = fmt(p); }); $$('.seek .dur').forEach(function (e) { e.textContent = fmt(d); }); }
-      $$('.sfill').forEach(function (e) { e.style.transform = 'scaleX(' + f + ')'; });
+      var p = Playback.position(), d = Playback.duration(), f = d ? Math.min(1, p / d) : 0, sec = Math.floor(p / 1000), i;
+      if (sec !== lastSec) { lastSec = sec; for (i = 0; i < curs.length; i++) curs[i].textContent = fmt(p); for (i = 0; i < durs.length; i++) durs[i].textContent = fmt(d); }
+      if (Math.abs(f - lastF) > 0.0007) { lastF = f; for (i = 0; i < fills.length; i++) fills[i].style.transform = 'scaleX(' + f + ')'; }
       lyricTick(p);
     }
     requestAnimationFrame(tick);

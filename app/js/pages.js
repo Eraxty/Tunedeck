@@ -180,6 +180,19 @@ var Account = (function () {
       }
       g._key = function (k) { if (k !== 'left' && k !== 'right') return false; Lyrics.setGlobal(Lyrics.globalOffset() + (k === 'left' ? -100 : 100)); paint(); return true; };
       paint();
+      var fr = row(s, 'music', '', '', function () {});
+      var STEPS = [0, 3000, 6000, 9000, 12000];
+      function paintFade() {
+        var ms = Playback.fade();
+        fr.querySelector('.t').textContent = 'Smooth transitions: ' + (ms ? (ms / 1000) + ' seconds' : 'off');
+        fr.querySelector('.s').textContent = 'Press left or right. Songs fade out and the next fades in. (Spotify’s Automix overlaps two songs, which its player for other apps can’t do.)';
+      }
+      fr._key = function (k) {
+        if (k !== 'left' && k !== 'right') return false;
+        var i = STEPS.indexOf(Playback.fade()); if (i < 0) i = 2;
+        Playback.fade(STEPS[Math.max(0, Math.min(STEPS.length - 1, i + (k === 'left' ? -1 : 1)))]); paintFade(); return true;
+      };
+      paintFade();
       if (!SpotifyApi.linked()) row(s, 'music', 'Re-match imported songs', 'Look up playable versions again', function () { Library.clearMatches(); UI.toast('Matches cleared'); });
     });
 

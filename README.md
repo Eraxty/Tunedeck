@@ -56,9 +56,13 @@ redirect address keeps working.
 | Yellow | Full-screen player with lyrics |
 | Red / Green | Lyrics 0.1 s earlier / later for this song |
 
-The full-screen player has **Cover**, **Lyrics** and **Dark** switches (any combination, remembered per
-profile). **Settings → Lyrics delay for this TV** fixes lyrics that are always off by the same amount,
-for example with a soundbar.
+The full-screen player has **Cover**, **Lyrics**, **Info** (song name and artist) and **Dark** switches, in
+any combination, remembered per profile. **Settings → Lyrics delay for this TV** fixes lyrics that are always
+off by the same amount, for example with a soundbar. **Settings → Smooth transitions** fades songs into each
+other (0 to 12 seconds).
+
+Artist pages show the most popular songs and a **See all songs** button that collects every song from the
+artist's albums and singles.
 
 ## Troubleshooting
 
@@ -75,3 +79,7 @@ for example with a soundbar.
 
 - Playlists you follow but don't own play fine, but their song lists can't be shown.
 - An artist's "Popular" songs come from a search, as Spotify removed that endpoint for developer apps.
+- No music videos or Canvas loops: Spotify's player for other apps is audio-only, and its terms forbid
+  pairing Spotify audio with other video.
+- No true Automix: that overlaps two songs, and Spotify's player for other apps plays one stream at a time.
+  Smooth transitions fade instead.
