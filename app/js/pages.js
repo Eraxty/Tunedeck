@@ -16,10 +16,11 @@ var Account = (function () {
     }).then(function (info) {
       d = UI.dialog('Sign in with Spotify',
         '<div class="signin">' + UI.qr(info.phoneUrl, 320) + '<div class="si-steps">' +
-        '<div class="step"><b>1</b><span>Scan the code with your phone’s camera</span></div>' +
+        '<div class="step"><b>1</b><span>Connect your phone to the <b>same Wi‑Fi as this TV</b> (not mobile data), then scan the code</span></div>' +
         '<div class="step"><b>2</b><span>Your phone warns the TV’s connection isn’t private. Tap <i>Advanced → Continue</i>: it’s your TV’s own certificate</span></div>' +
         '<div class="step"><b>3</b><span>Log in to Spotify and tap <i>Agree</i>. The TV signs in by itself.</span></div>' +
-        '<p class="dim small">Waiting for your phone…</p></div></div>' +
+        '<p class="dim small">No phone? Open <b>' + esc(info.phoneUrl) + '</b> in a browser on any computer on the same Wi‑Fi.</p>' +
+        '<p class="dim small">Waiting for you to log in…</p></div></div>' +
         '<p class="dim small setup">First time only: in the Spotify developer dashboard, add <b>' + esc(info.callback) + '</b> as a Redirect URI, and add each person’s Spotify email under Users and Access.</p>',
         [{ label: 'Cancel', onClick: function () { Spotify.stopLogin(); if (done) done(new Error('cancelled')); } }]);
     }, function (e) { UI.toast(e.message); if (done) done(e); });
