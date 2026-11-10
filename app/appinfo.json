@@ -1,6 +1,6 @@
 {
   "id": "com.ice.tunedeck",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "vendor": "ice",
   "type": "web",
   "main": "index.html",
@@ -10,5 +10,9 @@
   "bgColor": "#121212",
   "resolution": "1920x1080",
   "disallowScrollingInMainWindow": true,
-  "requiredPermissions": ["time.query", "activity.operation"]
+  "requiredPermissions": [
+    "time.query",
+    "activity.operation"
+  ],
+  "disableBackHistoryAPI": true
 }

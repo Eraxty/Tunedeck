@@ -71,19 +71,28 @@ var Spotify = (function () {
   function token() { return access && Date.now() < exp ? Promise.resolve(access) : refresh(); }
   function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
 
-  function get(path, attempt) {
+  function get(path, attempt) { return call('GET', path, null, attempt); }
+  // Web API call with token refresh, 401 retry and 429 backoff honouring Retry-After.
+  function call(method, path, body, attempt) {
     attempt = attempt || 0;
     return token().then(function (t) {
-      return fetch(path.indexOf('https://') === 0 ? path : CFG.spotifyApi + path, { headers: { Authorization: 'Bearer ' + t } });
+      var opts = { method: method, headers: { Authorization: 'Bearer ' + t } };
+      if (body !== null && body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+      return fetch(path.indexOf('https://') === 0 ? path : CFG.spotifyApi + path, opts);
     }).then(function (r) {
-      if (r.ok) return r.json();
-      if (r.status === 401 && attempt < 1) { access = null; return get(path, attempt + 1); }
+      if (r.status === 204 || r.status === 202) return null;
+      if (r.ok) return r.text().then(function (t) { return t ? JSON.parse(t) : null; });
+      if (r.status === 401 && attempt < 1) { access = null; return call(method, path, body, attempt + 1); }
       if (r.status === 429 && attempt < 3) {
         var ra = parseInt(r.headers.get('Retry-After'), 10), ms = ra > 0 ? ra * 1000 : 1000 * Math.pow(2, attempt);
         if (ms > 30000) throw fail('Spotify is rate limiting us. Try again in ' + Math.ceil(ms / 1000) + 's.', 429);
-        return wait(ms).then(function () { return get(path, attempt + 1); });
+        return wait(ms).then(function () { return call(method, path, body, attempt + 1); });
       }
-      return r.json().catch(function () { return {}; }).then(function (j) { throw fail((j.error && j.error.message) || ('Spotify error ' + r.status), r.status); });
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        var msg = (j.error && j.error.message) || ('Spotify error ' + r.status);
+        if (r.status === 403 && /not registered|user may not be registered|developer/i.test(msg)) msg = 'This Spotify account isn’t on the app’s allowed users list (Spotify developer dashboard → Users and Access).';
+        throw fail(msg, r.status);
+      });
     });
   }
 
@@ -95,10 +104,19 @@ var Spotify = (function () {
     return page(path);
   }
 
+  var meP = null;
+  function me() {
+    if (!meP) meP = get('/me').then(function (m) {
+      var u = { id: m.id, account: m.account_id || m.id, name: m.display_name || m.id, avatar: m.images && m.images.length ? m.images[m.images.length - 1].url : '' };
+      Store.set('spotifyMe', u); return u;
+    }, function (e) { meP = null; throw e; });
+    return meP;
+  }
+
   return {
     linked: function () { return !!auth(); }, linkedAt: function () { var a = auth(); return a && a.linkedAt; },
-    unlink: function () { Store.set('spotify', null); access = null; },
+    token: token, call: call, me: me, cachedMe: function () { return Store.get('spotifyMe', null); },
+    unlink: function () { Store.set('spotify', null); Store.set('spotifyMe', null); access = null; meP = null; },
     startLogin: startLogin, stopLogin: stopLogin, get: get, getAll: getAll,
-    profile: function () { return get('/me'); }
   };
 })();

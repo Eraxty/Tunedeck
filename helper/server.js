@@ -103,6 +103,16 @@ function api(req, res, u) {
   if (u.pathname === '/api/info') return send(res, 200, { ip: lanIp(), phoneUrl: 'http://' + lanIp() + ':8899/', callback: 'https://' + lanIp() + ':8900/callback' });
   if (u.pathname === '/api/upload' && req.method === 'POST') return handleUpload(req, res, q);
   if (!isLocal(req)) return send(res, 403, { error: 'TV only' });
+  if (u.pathname === '/api/log' && req.method === 'POST') {
+    return readBody(req, function (err, buf) {
+      try {
+        var f = '/tmp/tunedeck-app.log';
+        if (fs.existsSync(f) && fs.statSync(f).size > 512 * 1024) fs.renameSync(f, f + '.1');
+        fs.appendFileSync(f, new Date().toISOString() + ' ' + buf.toString('utf8').slice(0, 4000) + '\n');
+      } catch (e) {}
+      send(res, 200, { ok: true });
+    });
+  }
   if (u.pathname === '/api/imports') return send(res, 200, pending.imports.map(function (i) { return { id: i.id, from: i.from, files: i.files }; }));
   if (u.pathname === '/api/imports/done' && req.method === 'POST') {
     pending.imports = pending.imports.filter(function (i) { return String(i.id) !== String(q.id); });
