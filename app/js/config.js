@@ -1,8 +1,8 @@
-// Chromium 53 on webOS 4.x: ES2015 syntax only (no async/await, no ?. , no object spread),
+// Chromium 53 on webOS 4.x: ES2016 syntax at most (nothing from ES2017 on, no ?. , no object spread),
 // and no Object.values/entries or padStart. No CSS grid.
 var CFG = {
   appName: 'tunedeck',
-  version: '0.5.0',
+  version: '0.5.1',
   audius: 'https://api.audius.co/v1',
   lrclib: 'https://lrclib.net/api',
   helper: 'http://127.0.0.1:8899',

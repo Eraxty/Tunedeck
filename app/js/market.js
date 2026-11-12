@@ -148,7 +148,11 @@ var Ext = (function () {
   }
   function compiles(code) { try { new Function('Spicetify', code); return true; } catch (e) { return !(e instanceof SyntaxError); } }
 
-  // Babel is 3 MB, so it is loaded on first use and released a minute after the last conversion.
+  // Babel is 3 MB and only needed to convert an extension, which is fetched from the internet anyway, so it
+  // is downloaded on first use (a pinned version, refused if it differs by a byte) instead of shipping in the
+  // app, and released a minute after the last conversion.
+  var BABEL = ['https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js', 'https://unpkg.com/@babel/standalone@7.26.4/babel.min.js'];
+  var BABEL_SRI = 'sha384-x/ilTFv/u/eu6YSmkFDZl5V5Mm/pkxxcVv2cVJOrr1J0rvILhMvRBCy6yA75wYBj';
   var babel = null, babelFree = null;
   function loadBabel() {
     clearTimeout(babelFree);
@@ -156,10 +160,14 @@ var Ext = (function () {
     if (babel) return babel;
     babel = new Promise(function (res, rej) {
       if (window.Babel) return res(window.Babel);
-      var s = document.createElement('script'); s.src = 'js/vendor/babel.min.js';
-      s.onload = function () { s.parentNode.removeChild(s); window.Babel ? res(window.Babel) : rej(new Error('The converter didn’t load')); };
-      s.onerror = function () { babel = null; rej(new Error('The converter didn’t load')); };
-      document.head.appendChild(s);
+      (function next(i) {
+        if (i >= BABEL.length) { babel = null; return rej(new Error('The converter didn’t load. Is the TV online?')); }
+        var s = document.createElement('script');
+        s.src = BABEL[i]; s.integrity = BABEL_SRI; s.crossOrigin = 'anonymous';
+        s.onload = function () { s.parentNode.removeChild(s); if (window.Babel) res(window.Babel); else next(i + 1); };
+        s.onerror = function () { s.parentNode.removeChild(s); Log.add('babel load failed', BABEL[i]); next(i + 1); };
+        document.head.appendChild(s);
+      })(0);
     });
     return babel;
   }
