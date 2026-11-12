@@ -1,113 +1,168 @@
-<img src="docs/icon.png" width="96" alt="TuneDeck logo">
+<p align="center">
+  <img src="docs/logo.png" width="128" alt="TuneDeck logo">
+</p>
 
-# TuneDeck
+<h1 align="center">TuneDeck</h1>
 
-A fast Spotify-style music player for LG webOS TVs (rooted with the Homebrew Channel), built because the
-official Spotify TV app lags. Remote-first UI modelled on Spotify desktop with a Spicetify-style theme,
-synced lyrics, profiles and a marketplace for themes and extensions.
+<p align="center">A fast optimized Spotify styled music player for LG webOS TVs (rooted with the Homebrew Channel)</p>
+
+<p align="center">
+  <a href="https://github.com/Eraxty/Tunedeck/releases"><img src="https://img.shields.io/github/downloads/Eraxty/Tunedeck/total?style=for-the-badge&color=1DB954" alt="Downloads"></a>
+  <a href="https://github.com/Eraxty/Tunedeck/releases/latest"><img src="https://img.shields.io/github/v/release/Eraxty/Tunedeck?style=for-the-badge&color=1DB954&label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/webOS%20TV-4.0%2B-A50034?style=for-the-badge" alt="webOS TV 4.0+">
+  <a href="https://github.com/webosbrew/webos-homebrew-channel"><img src="https://img.shields.io/badge/Homebrew%20Channel-root-6f42c1?style=for-the-badge" alt="Homebrew Channel"></a>
+  <img src="https://img.shields.io/badge/Spotify-Premium-1DB954?style=for-the-badge&logo=spotify&logoColor=white" alt="Spotify Premium">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Eraxty/Tunedeck?style=for-the-badge" alt="MIT license"></a>
+</p>
+
+I made this because the official Spotify TV was very laggy and extremely unoptimised. This is a better client
+for Spotify and includes many features such as a marketplace for themes and extensions.
+
+![Home screen with a song playing](docs/screenshots/home.png)
+
+![Fullscreen player with synced lyrics](docs/screenshots/player.png)
 
 - **Spotify**: plays your Spotify music, playlists and Liked Songs through Spotify's official Web Playback
-  SDK (needs Spotify Premium). Your TV shows up as **TuneDeck TV** in Spotify Connect.
-- **Without Spotify**: free music from [Audius](https://audius.co), plus importing your Spotify or
-  YouTube library from a data export.
+  SDK (requires Spotify Premium). Your TV will show as TuneDeck TV in Spotify Connect.
+- **Without Spotify**: free music from [Audius](https://audius.co), plus importing your Spotify or YouTube
+  library from a data export but I wouldn't recommend the free music
 - Synced lyrics from [LRCLIB](https://lrclib.net); themes and extensions from the Spicetify community.
 
-TuneDeck is free and non-commercial. Spotify's terms don't allow commercial use of its player.
+TuneDeck is free and non-commercial as Spotify's terms prohibit the use of the player for commercial purposes
+and I love OSS
 
-## Install
+## Features
 
-**From the Homebrew Channel** (rooted LG TV): open the Homebrew Channel, find **TuneDeck** under
-Multimedia and install it. On first launch TuneDeck asks the Homebrew Channel to set up its helper, a
-small server on the TV for the phone sign-in page, the Spotify login relay and playlist imports. The
-helper:
+### Look like Spotify desktop
 
-- runs from the app's own folder;
-- keeps its certificate and pending imports in `/var/lib/webosbrew/tunedeck`;
-- starts at boot through a link in `/var/lib/webosbrew/init.d` (removing the app leaves a dead link that is
-  skipped);
-- never touches system partitions or the firmware.
+- Home with your quick picks like spotify desktop app which shows your top songs, your playlists, favourite
+  artists and new releases
+- Now Playing panel on the right showing the cover, live lyrics, next in queue and information
+- Album art background that blurs and changes with every track sounds awesome
 
-Root is optional: without it, free music works but Spotify sign-in doesn't.
+### Fullscreen player
 
-**For development** (root SSH and `ares-cli` on the computer):
+- You can disable/enable cover, lyrics, and info in fullscreen player plus a dark mode
+- Lyrics sync
+- If the lyrics are a little bit early or late (unsynchronized), you can adjust that
+
+### Playbacks
+
+- Your TV will appear as TuneDeck TV in Spotify Connect, so you can control it even from your phone
+- Queue page where you can jump to any track
+- Shuffle and repeat as it works in Spotify
+- Like songs and add them to your playlist from the player
+
+### Designed for the remote
+
+- Easy navigation
+- Magic Remote pointer and scroll wheel support
+- Media keys support: yellow - lyrics, blue - player, red/green - lyrics synchronization
+- Designed for the TV's weak hardware. Minimalistic but beautiful
+
+### Marketplace
+
+- Color themes from Spicetify community, saved for the current profile
+- Spicetify extensions converted on the fly for the TV to run in its old browser. Extension compatibility
+  will be shown
+
+## Installation
+
+An LG TV rooted with the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) for Spotify
+is needed since the Spotify sign-in requires a small helper process to be run on the TV as root. On the TV
+with only Developer Mode the application installs correctly and free music works, however, sign-in via
+Spotify does not.
+
+### From the Homebrew Channel
+
+Go to the Homebrew Channel, choose TuneDeck and click Install. (It is not available just yet,
+awaiting approval. In the meantime, you may use one of the methods below.)
+
+### Manual ipk installation
+
+Download `com.ice.tunedeck_<version>_all.ipk` from the
+[latest release](https://github.com/Eraxty/Tunedeck/releases/latest), and select one of the options below.
+
+- **webOS Dev Manager** (Windows, macOS, Linux): download it from
+  [webosbrew/dev-manager-desktop](https://github.com/webosbrew/dev-manager-desktop), add your TV, and install
+  the ipk using the Apps tab.
+- **ares-cli** on your computer: configure your TV one-time using `ares-setup-device`, and then run
+  `ares-install com.ice.tunedeck_<version>_all.ipk`.
+- **Rooted TV SSH access**:
+
+  ```bash
+  scp com.ice.tunedeck_*_all.ipk root@<tv-ip>:/tmp/tunedeck.ipk
+  ssh root@<tv-ip> "luna-send -i luna://com.webos.appInstallService/dev/install '{\"id\":\"com.ice.tunedeck\",\"ipkUrl\":\"/tmp/tunedeck.ipk\",\"subscribe\":true}'"
+  ```
+
+Regardless of how you installed it, run TuneDeck once: on a rooted TV it installs its helper automatically
+via the Homebrew Channel and no additional steps are needed.
+
+### Development
+
+Rooted SSH and `ares-cli` on your computer:
 
 ```bash
-TV_HOST=root@<tv-ip> ./scripts/deploy.sh   # build, install, set up the helper (does not launch the app)
-./scripts/release.sh                       # dist/: the ipk and its Homebrew Channel manifest
+TV_HOST=root@<tv-ip> ./scripts/deploy.sh
+./scripts/release.sh
 ```
 
-## Signing in with Spotify
+## Spotify sign-in
 
-Spotify only lets an app made by an individual sign in with a key ("Client ID") that the listener creates
-themselves, so each person sets up their own key once. It takes about 3 minutes and needs Spotify Premium.
+To let the app sign in to Spotify, it has to have a unique key ("Client ID"), that was generated individually
+by the listener who uses it. Thus, every listener has to set up their own key once. It takes about 2 minutes
+and requires Spotify Premium.
 
-1. On the TV: the first launch opens **Sign in with Spotify** (later: **Settings → Sign in with Spotify** or
-   **Add profile → Sign in with Spotify**).
-2. Put your phone on the **same Wi-Fi as the TV** and scan the QR code.
-3. The phone walks you through it:
-   1. Open the Spotify developer dashboard and log in with *your* Spotify account.
-   2. Create an app called **TuneDeck**.
-   3. Add the **Redirect URI** shown on the phone page (copy button), e.g. `https://192.168.1.3:8900/callback`.
-   4. Tick **Web API** and **Web Playback SDK**, agree and **Save**.
-   5. Copy your app's **Client ID** into the phone page and tap **Send to TV**.
-4. Tap **Log in with Spotify**. Your phone warns that the connection isn't private: tap **Advanced**, then
-   **Continue**. That's the TV's own certificate, used only to finish the sign-in.
-5. Log in to Spotify and tap **Agree**. The TV signs in by itself.
+1. On the TV screen: First launch Sign in with Spotify (later: Settings → Sign in with Spotify or
+   Add profile → Sign in with Spotify).
 
-The TV remembers your key for your profile, so signing in again later skips straight to step 4. Only the
-Client ID goes to the TV; never share your Client secret. Reserve the TV's IP address in your router so the
-redirect address keeps working.
+2. Make sure your phone is connected to the same Wi-Fi as your TV and scan the QR code.
 
-## Using it
+3. On the phone:
+   1. Sign in to the Spotify developer dashboard with *your* Spotify account.
+   2. Create an application called TuneDeck.
+   3. Add the Redirect URI, as shown on the phone screen (copy button), e.g.,
+      `https://192.168.1.3:8900/callback`.
+   4. Select Web API and Web Playback SDK, agree, and Save.
+   5. Copy your application's Client ID into the phone screen and click on Send to TV.
 
-| Remote | What it does |
-| --- | --- |
-| Arrows, OK | Move and select |
-| Back | Previous page; Home from any main section; closes full-screen views |
-| ⏯ ⏪ ⏩ | Play/pause, jump 10 s back/forward |
-| On the progress bar: ◀ ▶ | Jump 10 s |
-| Blue | Full-screen player |
-| Yellow | Full-screen player with lyrics |
-| Red / Green | Lyrics 0.1 s earlier / later for this song |
+4. Click Log in with Spotify. Your phone will warn you that the connection isn't secure; click on
+   Advanced, then Continue. This is the certificate of your TV which is used only to complete the
+   login process.
 
-The full-screen player has **Cover**, **Lyrics**, **Info** (song name and artist) and **Dark** switches, in
-any combination, remembered per profile. **Settings → Lyrics delay for this TV** fixes lyrics that are always
-off by the same amount, for example with a soundbar. **Settings → Smooth transitions** (0 to 12 seconds):
-free songs truly crossfade (overlap); Spotify songs fade out and in. **8D** sound (circling around you) plays
-by itself on every song that supports it, which is free songs; **Settings → 8D audio** turns it off.
+5. Log in to Spotify and click on Agree. Then the TV will log in by itself.
 
-Select **Your Library** at the top of the library panel to fold it into a narrow rail of covers (and back).
-Pointing with the Magic Remote focuses what you point at; its wheel scrolls the list under the pointer.
+The TV will remember your key for your profile and will skip the login process during the following launches.
+Only the Client ID gets sent to the TV. Never disclose Client ID of your TV to anyone and never share your
+Client secret. Reserve your TV IP address within your router to make sure the redirect address works.
 
-If the TV feels slow, close other apps first (YouTube in particular stays in memory). The TV has about 1 GB
-of RAM and swaps when it runs out.
+## Usage instructions
 
-Artist pages show the most popular songs and a **See all songs** button that collects every song from the
-artist's albums and singles.
+It is built keeping in mind the concept of desktop client of spotify and comes with same UI. You can browse
+the app using your lg remote just like you do with other apps on the TV.
 
 ## Troubleshooting
 
-- **"Site can't be reached" on the phone**: the phone isn't on the TV's Wi-Fi (mobile data or a guest
-  network), or the router isolates devices. Use a computer on the same Wi-Fi instead.
-- **"INVALID_CLIENT: Invalid redirect URI" / "redirect_uri not matching configuration"**: the Redirect URI
-  isn't saved in the Spotify app being used. Add it exactly as shown and press Save.
-- **"This Spotify account isn't on the app's allowed users list"**: you're logging in with a different
-  Spotify account than the one that created the key. Use the same account, or add the other account under
-  **Users and Access** in the dashboard.
-**Marketplace extensions** are written for Spotify desktop's newer browser engine. TuneDeck converts each one
-for the TV's engine when you open it (with [Babel](https://babeljs.io), bundled), then says whether it is
-ready or only partly works because it relies on parts of Spotify desktop's interface that TuneDeck doesn't
-have.
+- **“Site can't be reached” on the phone**: the phone isn’t on the same WiFi network as the TV (mobile data
+  or guest network) or the router segregates devices, Instead use a computer connected to the same WiFi.
 
-- **Logs**: the app writes to `/tmp/tunedeck-app.log` on the TV (`ssh root@<tv-ip> cat /tmp/tunedeck-app.log`).
+- **“INVALID_CLIENT: Invalid redirect URI” / “redirect_uri not matching configuration”**: the Redirect URI is
+  not configured in the Spotify app you are using. Add the redirect URI exactly as described and press Save.
 
-## Limits from Spotify (developer apps, 2026)
+- **“This Spotify account isn't on the app's allowed users list”**: you are trying to login using another
+  Spotify account than the one used to create the key. Either use the same account or add another Spotify
+  account as an additional user in the “Users and access” section of the dashboard.
 
-- Playlists you follow but don't own play fine, but their song lists can't be shown. Spotify's own mixes
-  (Daily Mix, artist Mixes, Discover Weekly) can't be read by apps at all; TuneDeck shows them by name and
-  plays them as a whole.
-- An artist's "Popular" songs come from a search, as Spotify removed that endpoint for developer apps.
-- No music videos or Canvas loops: Spotify's player for other apps is audio-only, and its terms forbid
-  pairing Spotify audio with other video.
+- **Marketplace Extensions**: Extensions that are present on marketplace are made for Spotify Desktop, using
+  the modern browser engine. TuneDeck makes sure that it works with TV's system when opened (through
+  [Babel](https://babeljs.io), which is part of it), and lets you know whether it works fully or partially
+  because of its dependency on parts of Spotify desktop user interface which TuneDeck doesn't have.
+
+- **Logs**: it logs into `/tmp/tunedeck-app.log` on the TV (`ssh root@<tv-ip> cat /tmp/tunedeck-app.log`).
+
+## Restrictions by Spotify (developer apps, 2026)
+
+- No music videos or Canvas loops
+- No automix playlists
 - No crossfade overlap or 8D for Spotify songs: Spotify's player for other apps plays one stream at a time
-  and its audio can't be processed by the app. Both work on free songs.
+  and its audio can't be processed by the app
